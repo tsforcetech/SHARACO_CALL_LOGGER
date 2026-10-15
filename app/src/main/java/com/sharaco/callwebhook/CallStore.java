@@ -112,7 +112,7 @@ public class CallStore extends SQLiteOpenHelper {
    String cid=c.getSharedPreferences("settings",0).getString("syncCompany","");
    String sim=c.getSharedPreferences("settings",0).getString("syncSim","");
    if(FirebaseAuth.getInstance().getUid()==null || cid.isEmpty() || sim.isEmpty())return Result.success();
-   if(!c.getSharedPreferences("settings",0).getBoolean("syncConsent",false))return Result.success();
+   if(!c.getSharedPreferences("settings",0).getBoolean("syncConsent",false) || !cid.equals(c.getSharedPreferences("settings",0).getString("syncConsentCompany","")))return Result.success();
    if(c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L)<=0L)return Result.success();
    try{
     DocumentSnapshot member=Tasks.await(FirebaseFirestore.getInstance().collection("companies").document(cid).collection("members").document(FirebaseAuth.getInstance().getUid()).get(),30,TimeUnit.SECONDS);
