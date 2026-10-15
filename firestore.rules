@@ -1,27 +1,46 @@
 rules_version = '2';
 service cloud.firestore {
-  match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
-    function isOwner(companyId) {
-      return signedIn() && exists(/databases/$(database)/documents/companies/$(companyId))
-        && get(/databases/$(database)/documents/companies/$(companyId)).data.ownerUid == request.auth.uid;
-    }
-    match /companies/{companyId} {
-      allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['name','ownerUid','createdAt'])
-        && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.name is string;
-      allow read, update, delete: if isOwner(companyId);
-      match /members/{memberUid} {
-        allow read: if isOwner(companyId) || (signedIn() && request.auth.uid == memberUid);
-        allow create: if isOwner(companyId) && request.resource.data.uid == memberUid;
-        allow update, delete: if isOwner(companyId);
-      }
-      match /call_logs/{callId} {
-        allow read: if isOwner(companyId);
-        allow write: if false;
-      }
-    }
-    match /{document=**} { allow read, write: if false; }
+ match /databases/{database}/documents {
+  function signed() { return request.auth != null; }
+  function company(cid) { return get(/databases/$(database)/documents/companies/$(cid)); }
+  function member(cid, uid) { return get(/databases/$(database)/documents/companies/$(cid)/members/$(uid)); }
+  function active(cid) { return signed() && exists(/databases/$(database)/documents/companies/$(cid)/members/$(request.auth.uid)) && member(cid, request.auth.uid).data.approved == true; }
+  function owner(cid) { return signed() && company(cid).data.ownerUid == request.auth.uid; }
+  function admin(cid) { return active(cid) && (member(cid,request.auth.uid).data.role in ['owner','admin']); }
+  function canReadCall(cid) { return admin(cid) || (active(cid) && (resource.data.uid == request.auth.uid || (member(cid,request.auth.uid).data.get('assignedUsers',[]).hasAny([resource.data.uid])))); }
+  match /companies/{cid} {
+   allow create: if signed() && request.resource.data.keys().hasOnly(['name','ownerUid','createdAt','joinToken']) && request.resource.data.ownerUid == request.auth.uid && request.resource.data.name is string && request.resource.data.joinToken is string && request.resource.data.joinToken.size() >= 30;
+   allow get, list: if owner(cid) || active(cid);
+   allow update: if owner(cid) && request.resource.data.ownerUid == resource.data.ownerUid;
+   allow delete: if false;
+   match /members/{uid} {
+    allow get: if owner(cid) || (signed() && request.auth.uid == uid);
+    allow list: if admin(cid);
+    allow create: if owner(cid) && request.resource.data.uid == uid && request.resource.data.approved == true && request.resource.data.role in ['employee','supervisor','admin','owner'];
+    allow update: if owner(cid) && request.resource.data.uid == resource.data.uid;
+    allow delete: if owner(cid) && uid != request.auth.uid;
+   }
+   match /join_requests/{uid} {
+    allow create: if signed() && request.auth.uid == uid && !exists(/databases/$(database)/documents/companies/$(cid)/join_requests/$(uid))
+      && request.resource.data.keys().hasOnly(['uid','name','sim','token','status','requestedAt'])
+      && request.resource.data.uid == uid
+      && request.resource.data.status == 'pending'
+      && request.resource.data.token == company(cid).data.joinToken
+      && request.resource.data.sim is string;
+    allow get: if owner(cid) || (signed() && request.auth.uid == uid);
+    allow list: if owner(cid);
+    allow update, delete: if owner(cid);
+   }
+   match /call_logs/{callId} {
+    allow get, list: if canReadCall(cid);
+    allow create: if active(cid)
+      && request.resource.data.uid == request.auth.uid
+      && request.resource.data.companyId == cid
+      && request.resource.data.sim == member(cid,request.auth.uid).data.sim
+      && request.resource.data.keys().hasOnly(['uid','companyId','sim','fromNumber','toNumber','remoteNumber','contactName','type','startedAt','durationSec','createdAt','deviceCallId']);
+    allow update, delete: if false;
+   }
   }
+  match /{other=**} { allow read, write: if false; }
+ }
 }
