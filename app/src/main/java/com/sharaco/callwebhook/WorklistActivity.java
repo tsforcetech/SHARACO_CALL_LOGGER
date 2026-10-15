@@ -20,18 +20,19 @@ public class WorklistActivity extends Activity {
  private final ArrayList<String> memberIds=new ArrayList<>();
  private final ArrayList<String> memberLabels=new ArrayList<>();
  private Spinner assignee;
- private int added=0,failed=0;
+ private int added=0,failed=0; private boolean worklistHome=true;
  @Override public void onCreate(Bundle b){super.onCreate(b);db=FirebaseFirestore.getInstance();uid=FirebaseAuth.getInstance().getUid();company=getIntent().getStringExtra("company");if(uid==null||company==null){finish();return;}
  db.collection("companies").document(company).collection("members").document(uid).get().addOnSuccessListener(d->{
  if(!Boolean.TRUE.equals(d.getBoolean("approved"))){finish();return;}role=d.getString("role");showHome();
  }).addOnFailureListener(e->finish());}
- void page(String title){layout=new LinearLayout(this);layout.setOrientation(1);layout.setPadding(24,24,24,24);ScrollView sc=new ScrollView(this);sc.addView(layout);setContentView(sc);label(title);}
+ void page(String title){worklistHome=title.equals("Assigned Number Worklist");layout=new LinearLayout(this);layout.setOrientation(1);layout.setPadding(24,24,24,24);ScrollView sc=new ScrollView(this);sc.addView(layout);setContentView(sc);label(title);if(!worklistHome)btn("‹  Back",()->showHome());}
  void label(String v){TextView t=new TextView(this);t.setText(v);t.setTextSize(17);t.setPadding(0,12,0,8);layout.addView(t);}
  EditText edit(String v){EditText t=new EditText(this);t.setHint(v);layout.addView(t);return t;}
  void btn(String v,Runnable action){Button b=new Button(this);b.setText(v);layout.addView(b);b.setOnClickListener(x->action.run());}
  void msg(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
  CollectionReference numbers(){return db.collection("companies").document(company).collection("assigned_numbers");}
  boolean manager(){return "owner".equals(role)||"admin".equals(role);}
+ @Override public void onBackPressed(){if(worklistHome)finish();else showHome();}
  void showHome(){page("Assigned Number Worklist");btn("My assigned numbers",()->myList());
  if(manager()){btn("Add / import numbers",()->addScreen());btn("All assignments and progress",()->allList());}
  btn("Back",()->finish());}
