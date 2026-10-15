@@ -31,6 +31,7 @@ public class MainActivity extends Activity {
   label(auth.getCurrentUser().getEmail());button("Sign out",()->{auth.signOut();company="";home();});
   button("Create company",()->createCompany());
   button("Join company (QR)",()->scanJoin());
+  String pending=getPreferences(0).getString("pendingCompany","");if(!pending.isEmpty())button("Check joined company approval",()->choose(pending,""));
   if(!company.isEmpty())companyHome();else showMyCompanies();
  }
  void login(){EditText email=input("Email"),pass=input("Password");pass.setInputType(129);
@@ -53,7 +54,7 @@ public class MainActivity extends Activity {
  void companyHome(){
   label("Company ID: "+company);button("Change company",()->{company="";getPreferences(0).edit().remove("company").apply();home();});
   db.collection("companies").document(company).collection("members").document(uid()).get().addOnSuccessListener(doc->{
-   if(!Boolean.TRUE.equals(doc.getBoolean("approved"))){label("Awaiting owner approval");return;}
+   if(!Boolean.TRUE.equals(doc.getBoolean("approved"))){label("Awaiting owner approval (or membership not yet created)");return;}
    role=doc.getString("role");sim=doc.getString("sim")==null?"":doc.getString("sim");
    getPreferences(0).edit().putString("sim",sim).apply();
    label("Role: "+role+" | Company SIM: "+sim);
@@ -79,7 +80,7 @@ public class MainActivity extends Activity {
   button("Submit request",()->{
    String n=name.getText().toString().trim(),p=phone.getText().toString().trim();if(n.isEmpty()||!p.matches("\\+[0-9]{8,15}")){toast("Enter name and international SIM number");return;}
    Map<String,Object> m=new HashMap<>();m.put("uid",uid());m.put("name",n);m.put("sim",p);m.put("token",token);m.put("status","pending");m.put("requestedAt",FieldValue.serverTimestamp());
-   db.collection("companies").document(cid).collection("join_requests").document(uid()).set(m).addOnSuccessListener(v->toast("Request submitted; owner approval required")).addOnFailureListener(e->toast(e.getMessage()));
+   db.collection("companies").document(cid).collection("join_requests").document(uid()).set(m).addOnSuccessListener(v->{getPreferences(0).edit().putString("pendingCompany",cid).apply();toast("Request submitted; owner approval required");}).addOnFailureListener(e->toast(e.getMessage()));
   });button("Back",()->home());
  }
  void requests(){page("Pending join requests");db.collection("companies").document(company).collection("join_requests").whereEqualTo("status","pending").get().addOnSuccessListener(s->{
