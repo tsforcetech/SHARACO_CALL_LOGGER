@@ -12,7 +12,8 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.*;
 import com.google.zxing.*;
 import com.google.zxing.common.BitMatrix;
-import com.journeyapps.barcodescanner.*;
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
 import java.util.*;
 
 public class MainActivity extends Activity {
