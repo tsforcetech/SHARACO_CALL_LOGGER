@@ -23,11 +23,14 @@ public class CallStore extends SQLiteOpenHelper {
   if(c.checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)return;
   if(company==null||company.isEmpty()||sim==null||sim.isEmpty())return;
   String uid=FirebaseAuth.getInstance().getUid();if(uid==null)return;
+  long consentStart=c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L);
+  if(consentStart<=0L)return;
   String[] cols={CallLog.Calls._ID,CallLog.Calls.NUMBER,CallLog.Calls.TYPE,CallLog.Calls.DATE,CallLog.Calls.DURATION};
   try(Cursor cursor=c.getContentResolver().query(CallLog.Calls.CONTENT_URI,cols,null,null,CallLog.Calls.DATE+" DESC")){
    if(cursor==null)return;int count=0;
    while(cursor.moveToNext()&&count++<2000){
     long row=cursor.getLong(0),ms=cursor.getLong(3),duration=cursor.getLong(4);
+    if(ms<consentStart)break;
     String number=cursor.getString(1);int t=cursor.getInt(2);
     String type=t==CallLog.Calls.INCOMING_TYPE?"INCOMING":t==CallLog.Calls.OUTGOING_TYPE?"OUTGOING":t==CallLog.Calls.MISSED_TYPE?"MISSED":t==CallLog.Calls.REJECTED_TYPE?"REJECTED":t==CallLog.Calls.BLOCKED_TYPE?"BLOCKED":"OTHER";
     String contact=contact(c,number);
@@ -82,7 +85,7 @@ public class CallStore extends SQLiteOpenHelper {
     try{
       Tasks.await(FirebaseFirestore.getInstance().collection("companies").document(cid).collection("call_logs").document(id).set(m),30,TimeUnit.SECONDS);
       ContentValues done=new ContentValues();done.put("uploaded",1);getWritableDatabase().update("calls",done,"id=?",new String[]{id});
-    }catch(Exception e){success=false;}
+    }catch(Exception e){success=false;break;}
    }
   }catch(Exception e){return false;}
   return success;
@@ -110,6 +113,7 @@ public class CallStore extends SQLiteOpenHelper {
    String sim=c.getSharedPreferences("settings",0).getString("syncSim","");
    if(FirebaseAuth.getInstance().getUid()==null || cid.isEmpty() || sim.isEmpty())return Result.success();
    if(!c.getSharedPreferences("settings",0).getBoolean("syncConsent",false))return Result.success();
+   if(c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L)<=0L)return Result.success();
    try{
     DocumentSnapshot member=Tasks.await(FirebaseFirestore.getInstance().collection("companies").document(cid).collection("members").document(FirebaseAuth.getInstance().getUid()).get(),30,TimeUnit.SECONDS);
     if(!Boolean.TRUE.equals(member.getBoolean("approved")) || !sim.equals(member.getString("sim")))return Result.success();
