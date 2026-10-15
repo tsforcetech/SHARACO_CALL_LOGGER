@@ -22,5 +22,6 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation("androidx.work:work-runtime:2.10.0")
+    implementation("com.google.guava:listenablefuture:1.0")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 }
