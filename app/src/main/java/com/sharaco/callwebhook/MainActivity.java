@@ -106,9 +106,17 @@ public class MainActivity extends Activity {
   }).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());
  }
  void localHistory(){page("Local SIM Call History");for(String row:store.history(company))label(row);button("Back",()->home());}
- void teamLogs(){page("Company Call Logs");db.collection("companies").document(company).collection("call_logs").orderBy("startedAt",Query.Direction.DESCENDING).limit(100).get().addOnSuccessListener(s->{for(DocumentSnapshot d:s)label(d.getString("remoteNumber")+" | "+d.getString("type")+" | "+d.getLong("durationSec")+" sec");}).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());}
- void report(){page("Call Summary");db.collection("companies").document(company).collection("call_logs").limit(1000).get().addOnSuccessListener(s->{
+ void teamLogs(){page("Company Call Logs");withAuthorizedCalls(q->q.limit(100).get().addOnSuccessListener(s->{for(DocumentSnapshot d:s)label(d.getString("remoteNumber")+" | "+d.getString("type")+" | "+d.getLong("durationSec")+" sec");} ).addOnFailureListener(e->toast(e.getMessage())));button("Back",()->home());}
+ void report(){page("Call Summary");withAuthorizedCalls(q->q.limit(1000).get().addOnSuccessListener(s->{
    long seconds=0;Map<String,Integer> byType=new TreeMap<>();for(DocumentSnapshot d:s){String t=d.getString("type");byType.put(t,byType.getOrDefault(t,0)+1);Long v=d.getLong("durationSec");seconds+=v==null?0:v;}
    label("Sample of up to 1,000 authorized calls");label("Total calls: "+s.size());label("Total duration: "+seconds+" seconds");for(String t:byType.keySet())label(t+": "+byType.get(t));
-  }).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());}
+  }).addOnFailureListener(e->toast(e.getMessage())));button("Back",()->home());}
+ void withAuthorizedCalls(java.util.function.Consumer<Query> action){
+  Query q=db.collection("companies").document(company).collection("call_logs");
+  if("owner".equals(role)){action.accept(q);return;}
+  db.collection("companies").document(company).collection("members").document(uid()).get().addOnSuccessListener(m->{
+   List<String> ids=new ArrayList<>();ids.add(uid());Object assigned=m.get("assignedUsers");if(assigned instanceof List){for(Object value:(List<?>)assigned){String id=String.valueOf(value);if(!ids.contains(id)&&ids.size()<30)ids.add(id);}}
+   action.accept(q.whereIn("uid",ids));
+  }).addOnFailureListener(e->toast(e.getMessage()));
+ }
 }
