@@ -34,9 +34,35 @@ public class MainActivity extends Activity {
   String pending=getSharedPreferences("settings",0).getString("pendingCompany","");if(!pending.isEmpty())button("Check joined company approval",()->choose(pending,""));
   if(!company.isEmpty())companyHome();else showMyCompanies();
  }
- void login(){EditText email=input("Email"),pass=input("Password");pass.setInputType(129);
-  button("Login",()->auth.signInWithEmailAndPassword(email.getText().toString().trim(),pass.getText().toString()).addOnSuccessListener(a->home()).addOnFailureListener(e->toast(e.getMessage())));
-  button("Register",()->auth.createUserWithEmailAndPassword(email.getText().toString().trim(),pass.getText().toString()).addOnSuccessListener(a->home()).addOnFailureListener(e->toast(e.getMessage())));
+ void login(){
+  EditText email=input("Email address"),pass=input("Password (minimum 6 characters)");
+  email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+  pass.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+  button("Login",()->authenticate(email,pass,false));
+  button("Register",()->authenticate(email,pass,true));
+ }
+ void authenticate(EditText email,EditText password,boolean register){
+  String e=email.getText().toString().trim();
+  String p=password.getText().toString();
+  if(e.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(e).matches()){
+    email.setError("Enter a valid email address");email.requestFocus();return;
+  }
+  if(p.length()<6){
+    password.setError("Password must contain at least 6 characters");password.requestFocus();return;
+  }
+  try {
+    com.google.android.gms.tasks.Task<com.google.firebase.auth.AuthResult> task=
+      register?auth.createUserWithEmailAndPassword(e,p):auth.signInWithEmailAndPassword(e,p);
+    task.addOnSuccessListener(result->{toast(register?"Account created":"Signed in");home();})
+        .addOnFailureListener(err->{
+          android.util.Log.e("SharacoAuth",register?"Registration failed":"Login failed",err);
+          String reason=err.getLocalizedMessage();
+          toast((register?"Registration failed: ":"Login failed: ")+(reason==null?"Please check Firebase Authentication settings":reason));
+        });
+  }catch(Exception err){
+    android.util.Log.e("SharacoAuth","Authentication request failed before network call",err);
+    toast("Unable to start authentication: "+err.getClass().getSimpleName());
+  }
  }
  void createCompany(){page("Create Company");EditText name=input("Company name");button("Save company",()->{
   String n=name.getText().toString().trim();if(n.isEmpty()){toast("Company name required");return;}
