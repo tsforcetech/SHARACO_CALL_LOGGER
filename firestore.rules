@@ -7,16 +7,16 @@ service cloud.firestore {
   function active(cid) { return signed() && exists(/databases/$(database)/documents/companies/$(cid)/members/$(request.auth.uid)) && member(cid, request.auth.uid).data.approved == true; }
   function owner(cid) { return signed() && exists(/databases/$(database)/documents/companies/$(cid)) && company(cid).data.ownerUid == request.auth.uid; }
   function admin(cid) { return active(cid) && (member(cid,request.auth.uid).data.role in ['owner','admin']); }
-  function canReadCall(cid) { return owner(cid) || (active(cid) && (resource.data.uid == request.auth.uid || member(cid,request.auth.uid).data.get('assignedUsers',[]).hasAny([resource.data.uid]))); }
+  function canReadCall(cid) { return admin(cid) || (active(cid) && (resource.data.uid == request.auth.uid || member(cid,request.auth.uid).data.get('assignedUsers',[]).hasAny([resource.data.uid]))); }
   match /companies/{cid} {
    allow create: if signed() && request.resource.data.keys().hasOnly(['name','ownerUid','createdAt','joinToken']) && request.resource.data.ownerUid == request.auth.uid && request.resource.data.name is string && request.resource.data.joinToken is string && request.resource.data.joinToken.size() >= 30;
    allow get, list: if owner(cid) || active(cid);
    allow update: if owner(cid) && request.resource.data.ownerUid == resource.data.ownerUid;
    allow delete: if false;
    match /members/{uid} {
-    allow get: if owner(cid) || (signed() && request.auth.uid == uid);
+    allow get: if admin(cid) || (signed() && request.auth.uid == uid);
     allow list: if admin(cid);
-    allow create: if signed() && request.resource.data.uid == uid && request.resource.data.approved == true && ((uid == request.auth.uid && request.resource.data.role == 'owner' && getAfter(/databases/$(database)/documents/companies/$(cid)).data.ownerUid == uid) || (owner(cid) && request.resource.data.role in ['employee','supervisor','admin']));
+    allow create: if signed() && request.resource.data.uid == uid && request.resource.data.approved == true && ((uid == request.auth.uid && request.resource.data.role == 'owner' && getAfter(/databases/$(database)/documents/companies/$(cid)).data.ownerUid == uid) || (admin(cid) && request.resource.data.role == 'employee') || (owner(cid) && request.resource.data.role in ['supervisor','admin']));
     allow update: if (owner(cid) && request.resource.data.uid == resource.data.uid) || (active(cid) && uid == request.auth.uid && resource.data.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sim']) && request.resource.data.sim is string && request.resource.data.sim.matches('\\+[0-9]{8,15}'));
     allow delete: if owner(cid) && uid != request.auth.uid;
    }
@@ -28,8 +28,9 @@ service cloud.firestore {
       && request.resource.data.token == company(cid).data.joinToken
       && request.resource.data.sim is string;
     allow get: if owner(cid) || (signed() && request.auth.uid == uid);
-    allow list: if owner(cid);
-    allow update, delete: if owner(cid);
+    allow list: if admin(cid);
+    allow update: if admin(cid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) && resource.data.status == 'pending' && request.resource.data.status == 'approved';
+    allow delete: if owner(cid);
    }
    match /assigned_numbers/{itemId} {
     allow get, list: if admin(cid) || (active(cid) && resource.data.assignedTo == request.auth.uid);
