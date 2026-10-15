@@ -33,15 +33,16 @@ public class MainActivity extends Activity {
  String section="";
  static final int GOOGLE_REQUEST=712;
  boolean signingIn=false;
- int teal=Color.rgb(0,171,143);
+ int teal=Color.rgb(0,142,125);
+ int ink=Color.rgb(21,39,47);
  GradientDrawable rounded(int color,int r){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(r);return d;}
- void label(String s){TextView v=new TextView(this);v.setText(s);v.setTextColor(Color.rgb(32,48,53));v.setTextSize(16);v.setPadding(16,14,16,10);panel.addView(v);}
+ void label(String s){TextView v=new TextView(this);v.setText(s);v.setTextColor(Color.rgb(75,96,102));v.setTextSize(15);v.setPadding(8,12,8,12);panel.addView(v);}
  EditText input(String hint){EditText v=new EditText(this);v.setHint(hint);panel.addView(v);return v;}
  void button(String s,Runnable job){
   Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(15);
   boolean back=s.startsWith("‹")||s.equals("Back")||s.equals("Sign out")||s.equals("Change company");
   b.setTextColor(back?Color.rgb(22,79,74):Color.WHITE);
-  b.setBackground(rounded(back?Color.rgb(228,243,239):teal,28));b.setMinHeight(56);
+  b.setBackground(rounded(back?Color.rgb(228,243,239):teal,24));b.setMinHeight(54);b.setElevation(2);
   LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);bp.setMargins(0,7,0,7);
   panel.addView(b,bp);b.setOnClickListener(v->job.run());
 }
@@ -51,12 +52,12 @@ public class MainActivity extends Activity {
  void menuItem(String icon,String title,String subtitle,Runnable action){
   LinearLayout outer=new LinearLayout(this);outer.setOrientation(LinearLayout.HORIZONTAL);outer.setGravity(Gravity.CENTER_VERTICAL);
   GradientDrawable bg=rounded(Color.WHITE,34);bg.setStroke(1,Color.rgb(229,236,236));outer.setBackground(bg);
-  outer.setPadding(18,18,16,18);
+  outer.setPadding(16,19,16,19);outer.setElevation(3);
   TextView emblem=new TextView(this);emblem.setText(icon);emblem.setGravity(Gravity.CENTER);emblem.setTextSize(24);emblem.setTextColor(teal);
-  emblem.setBackground(rounded(Color.rgb(229,248,242),22));LinearLayout.LayoutParams il=new LinearLayout.LayoutParams(54,54);outer.addView(emblem,il);
+  emblem.setBackground(rounded(Color.rgb(226,246,241),20));LinearLayout.LayoutParams il=new LinearLayout.LayoutParams(54,54);outer.addView(emblem,il);
   LinearLayout texts=new LinearLayout(this);texts.setOrientation(1);texts.setPadding(18,0,4,0);
   TextView a=new TextView(this);a.setText(title);a.setTextSize(16);a.setTextColor(Color.rgb(29,56,60));a.setTypeface(null,Typeface.BOLD);texts.addView(a);
-  TextView b=new TextView(this);b.setText(subtitle);b.setTextSize(12);b.setTextColor(Color.rgb(117,134,138));texts.addView(b);
+  TextView b=new TextView(this);b.setText(subtitle);b.setTextSize(13);b.setTextColor(Color.rgb(117,134,138));texts.addView(b);
   outer.addView(texts,new LinearLayout.LayoutParams(0,-2,1));
   TextView arrow=new TextView(this);arrow.setText("›");arrow.setTextSize(28);arrow.setTextColor(teal);outer.addView(arrow);
   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,5,0,8);panel.addView(outer,lp);
@@ -71,6 +72,7 @@ public class MainActivity extends Activity {
     menuItem("☏","Assigned Numbers","View numbers and update contacted status",()->{Intent i=new Intent(this,WorklistActivity.class);i.putExtra("company",company);startActivity(i);});
     menuItem("◷","Call History","Review calls saved on this device",()->localHistory());
     menuItem("☷","Sync Health","Pending records, upload status and last sync",()->syncHealth());
+    menuItem("▣","This Device","Register this phone in your company",()->openDevices());
     menuItem("◉","Lead Follow-ups","Update lead status and next actions",()->openCrm());
     menuItem("↻","Sync Now","Queue call history upload to Firebase",()->{CallStore.schedule(this);toast("Background sync queued");});
     menuItem("✓","Call Access","Grant Android call-history permissions",()->{if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS},12);else {CallStore.schedule(this);toast("Permission already granted");}});
@@ -79,6 +81,7 @@ public class MainActivity extends Activity {
     menuItem("▦","Company QR Code","Invite employees to this company",()->showQr());
     menuItem("✓","Join Requests","Review and approve employee requests",()->requests());
     menuItem("♙","Members & Roles","Manage or view company users",()->manageTeam());
+    menuItem("▣","Devices","View company device registrations",()->openDevices());
   }else if(type.equals("reports")){
     sectionTitle("Performance");
     menuItem("▥","Company Call Reports","Date filters and CSV export",()->{Intent i=new Intent(this,ReportActivity.class);i.putExtra("company",company);startActivity(i);});
@@ -93,11 +96,11 @@ public class MainActivity extends Activity {
  void toast(String msg){Toast.makeText(this,msg,Toast.LENGTH_LONG).show();}
  void page(String title){
   currentScreen=title;
-  panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(24,24,24,32);
-  panel.setBackgroundColor(Color.rgb(247,250,250));
+  panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(22,24,22,38);
+  panel.setBackgroundColor(Color.rgb(246,249,250));
   ScrollView sv=new ScrollView(this);sv.setFillViewport(true);sv.addView(panel);setContentView(sv);
   if(!title.equals("Sharaco Call Logger")){button("‹  Back",()->onBackPressed());}
-  TextView heading=new TextView(this);heading.setText(title);heading.setTextSize(23);heading.setTextColor(Color.rgb(16,48,48));heading.setTypeface(null,Typeface.BOLD);heading.setPadding(2,18,2,18);panel.addView(heading);
+  TextView heading=new TextView(this);heading.setText(title);heading.setTextSize(27);heading.setTextColor(ink);heading.setTypeface(null,Typeface.BOLD);heading.setPadding(2,18,2,18);panel.addView(heading);
  }
  String uid(){return auth.getUid();}
  @Override public void onCreate(Bundle b){super.onCreate(b);auth=FirebaseAuth.getInstance();db=FirebaseFirestore.getInstance();store=new CallStore(this);company=getSharedPreferences("settings",0).getString("company","");sim=getSharedPreferences("settings",0).getString("sim","");home();}
@@ -107,10 +110,10 @@ public class MainActivity extends Activity {
   ImageView brand=new ImageView(this);brand.setImageResource(R.drawable.sharaco_mark);brand.setAdjustViewBounds(true);
   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,110);panel.addView(brand,lp);
   if(uid()==null){login();return;}
-  label("Signed in as "+auth.getCurrentUser().getEmail());
-  sectionTitle("Your companies");
+  label("WELCOME BACK  ·  "+auth.getCurrentUser().getEmail());
+  sectionTitle("YOUR WORKSPACES");
   showMyCompanies();
-  sectionTitle("Company actions");
+  sectionTitle("GET STARTED");
   menuItem("＋","Create Company","Start a new company workspace",()->createCompany());
   menuItem("▦","Join Company","Scan the QR code supplied by your manager",()->scanJoin());
   String pending=getSharedPreferences("settings",0).getString("pendingCompany","");
@@ -181,21 +184,22 @@ public class MainActivity extends Activity {
   page("Company Workspace");
   menuItem("‹","All Companies","Back to company selection",()->home());
   db.collection("companies").document(company).get().addOnSuccessListener(d->label("Company: "+d.getString("name")));
-  label("Choose a company operation");
+  label("Everything for your team, in one place.");
   db.collection("companies").document(company).collection("members").document(uid()).get().addOnSuccessListener(doc->{
    if(!Boolean.TRUE.equals(doc.getBoolean("approved"))){label("Awaiting owner approval");return;}
    role=doc.getString("role");sim=doc.getString("sim")==null?"":doc.getString("sim");
    getSharedPreferences("settings",0).edit().putString("sim",sim).apply();
    if(!sim.isEmpty()){getSharedPreferences("settings",0).edit().putString("syncCompany",company).putString("syncSim",sim).apply();if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED)CallStore.schedule(this);}
-   sectionTitle("Workspace");
-   menuItem("☏","Calls & Follow-ups","Call history, sync and assigned numbers",()->showSection("calls"));
+   sectionTitle("WORKSPACE");
+   menuItem("☏","Calls & Follow-ups","History, leads, automatic sync",()->showSection("calls"));
    if(isAdmin())menuItem("▥","Reports & Insights","Company-wide call performance and activity",()->showSection("reports"));
    if(isAdmin())menuItem("▣","Company Overview","Employees, assigned numbers and sync activity",()->companyOverview());
    if("owner".equals(role)||"admin".equals(role))menuItem("♙","Team Management","QR joining, approvals and permissions",()->showSection("team"));
    if(isAdmin())menuItem("⚙","Company Configuration","Company administration and configuration",()->showSection("settings"));
-   label("Role: "+role+"   •   SIM: "+(sim.isEmpty()?"Not registered":sim));
+   label("Signed in as "+role+"   ·   SIM "+(sim.isEmpty()?"not set":sim));
   }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
  }
+ void openDevices(){Intent i=new Intent(this,DeviceActivity.class);i.putExtra("company",company);startActivity(i);}
  void openCrm(){
   Intent i=new Intent(this,CrmActivity.class);i.putExtra("company",company);startActivity(i);
  }
