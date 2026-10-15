@@ -81,7 +81,7 @@ public class MainActivity extends Activity {
     menuItem("♙","Members & Roles","Manage or view company users",()->manageTeam());
   }else if(type.equals("reports")){
     sectionTitle("Performance");
-    menuItem("▥","Call Summary","Call counts and durations",()->report());
+    menuItem("▥","Company Call Reports","Date filters and CSV export",()->{Intent i=new Intent(this,ReportActivity.class);i.putExtra("company",company);startActivity(i);});
     if("owner".equals(role)||"admin".equals(role))menuItem("☷","Team Calls","Review calls from authorized agents",()->teamLogs());
   }else{
     sectionTitle("Account & company");
