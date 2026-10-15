@@ -214,7 +214,9 @@ public class MainActivity extends Activity {
   label("Android call-log permission: "+(permission?"Granted":"Not granted"));
   label("My SIM: "+(sim.isEmpty()?"Not registered":sim));
   label("Call attribution check: "+(CallStore.safeSingleSim(this)?"One active SIM verified":"Not verified. Sync will pause until one active SIM and Phone permission are available."));
+  label("To synchronize calls, register this device in Company Devices and obtain owner approval if required. An inactive or unregistered device cannot upload.");
   label("Android schedules periodic work approximately every 15 minutes. Battery optimization, connectivity, sign-in and device policies can delay sync.");
+  button("Register or Check Device",()->openDevices());
   label("Automatic upload consent: "+(getSharedPreferences("settings",0).getBoolean("syncConsent",false)?"Enabled":"Disabled"));
   button("Queue upload now",()->{if(!getSharedPreferences("settings",0).getBoolean("syncConsent",false)){toast("Enable sync consent first");return;}CallStore.schedule(this);toast("Sync queued");});
  }
@@ -284,7 +286,7 @@ public class MainActivity extends Activity {
    WriteBatch b=db.batch();b.set(db.collection("companies").document(company).collection("members").document(d.getId()),m);
    b.update(d.getReference(),"status","approved");Map<String,Object> directory=new HashMap<>();directory.put("name",company);directory.put("role","employee");directory.put("status","approved");directory.put("updatedAt",FieldValue.serverTimestamp());b.commit().addOnSuccessListener(v->{db.collection("users").document(d.getId()).collection("companies").document(company).set(directory);requests();}).addOnFailureListener(e->toast(e.getMessage()));
   });}}).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());}
- @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==12 && checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED){CallStore.schedule(this);toast("Automatic background sync scheduled");}else if(code==12)toast("Call-log access was not granted");}
+ @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==12 && checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED){if(getSharedPreferences("settings",0).getBoolean("syncConsent",false) && company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany","")))CallStore.schedule(this);toast("Permissions updated. Register this device to enable uploads.");}else if(code==12)toast("Call-log access was not granted");}
  void manageTeam(){if(!isAdmin()){toast("Access denied");return;}page("Manage Company Team");
   db.collection("companies").document(company).collection("members").get().addOnSuccessListener(s->{
    for(DocumentSnapshot d:s){String id=d.getId();label(id+" | "+d.getString("role")+" | "+d.getString("sim"));
