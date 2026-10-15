@@ -86,10 +86,10 @@ public class CallStore extends SQLiteOpenHelper {
   int result=0;try(Cursor x=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM calls WHERE company=? AND uploaded=1",new String[]{cid})){if(x.moveToFirst())result=x.getInt(0);}return result;
  }
  public static long lastSync(Context c){return c.getSharedPreferences("settings",0).getLong("lastSync",0);}
- public synchronized boolean uploadBlocking(String companyId){
+ public synchronized boolean uploadBlocking(String companyId,long consentStartedAt){
   String current=FirebaseAuth.getInstance().getUid();if(current==null)return false;
   boolean success=true;
-  try(Cursor x=getReadableDatabase().rawQuery("SELECT id,company,uid,sim,remote,contact,calltype,startms,duration FROM calls WHERE uploaded=0 AND uid=? AND company=? ORDER BY startms ASC LIMIT 250",new String[]{current,companyId})){
+  try(Cursor x=getReadableDatabase().rawQuery("SELECT id,company,uid,sim,remote,contact,calltype,startms,duration FROM calls WHERE uploaded=0 AND uid=? AND company=? AND startms>=? ORDER BY startms ASC LIMIT 250",new String[]{current,companyId,String.valueOf(consentStartedAt)})){
    while(x.moveToNext()){
     String id=x.getString(0),cid=x.getString(1),owner=x.getString(2),sim=x.getString(3),remote=x.getString(4),contact=x.getString(5),type=x.getString(6);
     if(!cid.equals(companyId))continue;
@@ -143,7 +143,7 @@ public class CallStore extends SQLiteOpenHelper {
    }catch(Exception e){return Result.retry();}
    if(!CallStore.safeSingleSim(c))return Result.success();
    CallStore s=new CallStore(c);s.scan(c,cid,sim);
-   boolean ok=s.uploadBlocking(cid);if(ok)c.getSharedPreferences("settings",0).edit().putLong("lastSync",System.currentTimeMillis()).apply();return ok?Result.success():Result.retry();
+   boolean ok=s.uploadBlocking(cid,c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L));if(ok)c.getSharedPreferences("settings",0).edit().putLong("lastSync",System.currentTimeMillis()).apply();return ok?Result.success():Result.retry();
   }
  }
 }
