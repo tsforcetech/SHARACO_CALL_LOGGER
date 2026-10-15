@@ -59,6 +59,13 @@ public class CallStore extends SQLiteOpenHelper {
    }
   }catch(Exception ignored){}
  }
+ public synchronized int countPending(String cid){
+  int result=0;try(Cursor x=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM calls WHERE company=? AND uploaded=0",new String[]{cid})){if(x.moveToFirst())result=x.getInt(0);}return result;
+ }
+ public synchronized int countSynced(String cid){
+  int result=0;try(Cursor x=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM calls WHERE company=? AND uploaded=1",new String[]{cid})){if(x.moveToFirst())result=x.getInt(0);}return result;
+ }
+ public static long lastSync(Context c){return c.getSharedPreferences("settings",0).getLong("lastSync",0);}
  public synchronized boolean uploadBlocking(){
   String current=FirebaseAuth.getInstance().getUid();if(current==null)return false;
   boolean success=true;
@@ -102,7 +109,7 @@ public class CallStore extends SQLiteOpenHelper {
    String sim=c.getSharedPreferences("settings",0).getString("syncSim","");
    if(FirebaseAuth.getInstance().getUid()==null || cid.isEmpty() || sim.isEmpty())return Result.success();
    CallStore s=new CallStore(c);s.scan(c,cid,sim);
-   return s.uploadBlocking()?Result.success():Result.retry();
+   boolean ok=s.uploadBlocking();if(ok)c.getSharedPreferences("settings",0).edit().putLong("lastSync",System.currentTimeMillis()).apply();return ok?Result.success():Result.retry();
   }
  }
 }
