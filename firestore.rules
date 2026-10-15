@@ -16,7 +16,7 @@ service cloud.firestore {
    match /members/{uid} {
     allow get: if owner(cid) || (signed() && request.auth.uid == uid);
     allow list: if admin(cid);
-    allow create: if owner(cid) && request.resource.data.uid == uid && request.resource.data.approved == true && request.resource.data.role in ['employee','supervisor','admin','owner'];
+    allow create: if (owner(cid) || (signed() && uid == request.auth.uid && getAfter(/databases/$(database)/documents/companies/$(cid)).data.ownerUid == uid && request.resource.data.role == 'owner')) && request.resource.data.uid == uid && request.resource.data.approved == true && request.resource.data.role in ['employee','supervisor','admin','owner'];
     allow update: if owner(cid) && request.resource.data.uid == resource.data.uid;
     allow delete: if owner(cid) && uid != request.auth.uid;
    }
