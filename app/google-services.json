@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "205964404683",
+    "project_id": "sharaco-call-logger",
+    "storage_bucket": "sharaco-call-logger.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:205964404683:android:7b5ab8a92a8989f40cb84e",
+        "android_client_info": {
+          "package_name": "com.sharaco.callwebhook"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD44HQvkVq5eknQG2yeS1ggdsbpopDHCYU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
