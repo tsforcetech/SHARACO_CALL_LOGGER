@@ -289,6 +289,11 @@ public class MainActivity extends Activity {
     if("owner".equals(role)&&!id.equals(uid())){
      button("Promote to admin: "+id.substring(0,Math.min(8,id.length())),()->d.getReference().update("role","admin").addOnSuccessListener(v->manageTeam()).addOnFailureListener(e->toast(e.getMessage())));
      button("Set employee role: "+id.substring(0,Math.min(8,id.length())),()->d.getReference().update("role","employee").addOnSuccessListener(v->manageTeam()).addOnFailureListener(e->toast(e.getMessage())));
+     boolean approved=Boolean.TRUE.equals(d.getBoolean("approved"));
+     button((approved?"Deactivate: ":"Reactivate: ")+id.substring(0,Math.min(8,id.length())),()->new android.app.AlertDialog.Builder(this).setTitle(approved?"Deactivate team member?":"Reactivate team member?")
+      .setMessage(approved?"This stops the member from opening the workspace and syncing new calls after their next access check.":"Restore this member's access?")
+      .setNegativeButton("Cancel",null)
+      .setPositiveButton("Confirm",(dialog,which)->d.getReference().update("approved",!approved).addOnSuccessListener(v->manageTeam()).addOnFailureListener(e->toast(e.getMessage()))).show());
     }
    }
    if("owner".equals(role)){label("Assign call-log access by employee UID");EditText admin=input("Supervisor/admin UID"),target=input("Employee UID");
