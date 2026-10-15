@@ -12,6 +12,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import com.google.android.gms.tasks.Tasks;
 
 public class CallStore extends SQLiteOpenHelper {
  public CallStore(Context c){super(c,"call_history.db",null,1);}
@@ -58,12 +59,50 @@ public class CallStore extends SQLiteOpenHelper {
    }
   }catch(Exception ignored){}
  }
+ public synchronized boolean uploadBlocking(){
+  String current=FirebaseAuth.getInstance().getUid();if(current==null)return false;
+  boolean success=true;
+  try(Cursor x=getReadableDatabase().rawQuery("SELECT id,company,uid,sim,remote,contact,calltype,startms,duration FROM calls WHERE uploaded=0 AND uid=? ORDER BY startms ASC LIMIT 250",new String[]{current})){
+   while(x.moveToNext()){
+    String id=x.getString(0),cid=x.getString(1),owner=x.getString(2),sim=x.getString(3),remote=x.getString(4),contact=x.getString(5),type=x.getString(6);
+    long start=x.getLong(7),dur=x.getLong(8);
+    Map<String,Object> m=new HashMap<>();m.put("uid",owner);m.put("companyId",cid);m.put("sim",sim);
+    m.put("remoteNumber",remote==null?"":remote);m.put("fromNumber",type.equals("OUTGOING")?sim:remote);
+    m.put("toNumber",type.equals("OUTGOING")?remote:sim);m.put("contactName",contact==null?"":contact);
+    m.put("type",type);m.put("startedAt",start);m.put("durationSec",dur);
+    m.put("createdAt",com.google.firebase.firestore.FieldValue.serverTimestamp());m.put("deviceCallId",id);
+    try{
+      Tasks.await(FirebaseFirestore.getInstance().collection("companies").document(cid).collection("call_logs").document(id).set(m),30,TimeUnit.SECONDS);
+      ContentValues done=new ContentValues();done.put("uploaded",1);getWritableDatabase().update("calls",done,"id=?",new String[]{id});
+    }catch(Exception e){success=false;}
+   }
+  }catch(Exception e){return false;}
+  return success;
+ }
  public static void schedule(Context c){
-  PeriodicWorkRequest task=new PeriodicWorkRequest.Builder(SyncWorker.class,15,TimeUnit.MINUTES).build();
-  WorkManager.getInstance(c).enqueueUniquePeriodicWork("call-sync",ExistingPeriodicWorkPolicy.KEEP,task);
+  Constraints network=new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
+  PeriodicWorkRequest task=new PeriodicWorkRequest.Builder(SyncWorker.class,15,TimeUnit.MINUTES).setConstraints(network).build();
+  WorkManager.getInstance(c).enqueueUniquePeriodicWork("call-sync",ExistingPeriodicWorkPolicy.UPDATE,task);
+  syncNow(c);
+ }
+ public static void syncNow(Context c){
+  Constraints network=new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
+  OneTimeWorkRequest task=new OneTimeWorkRequest.Builder(SyncWorker.class).setConstraints(network).build();
+  WorkManager.getInstance(c).enqueueUniqueWork("call-sync-now",ExistingWorkPolicy.KEEP,task);
+ }
+ public static void stop(Context c){
+  WorkManager.getInstance(c).cancelUniqueWork("call-sync-now");
+  WorkManager.getInstance(c).cancelUniqueWork("call-sync");
  }
  public static class SyncWorker extends Worker {
   public SyncWorker(Context c,WorkerParameters p){super(c,p);}
-  @Override public Result doWork(){String company=getApplicationContext().getSharedPreferences("settings",0).getString("company","");String sim=getApplicationContext().getSharedPreferences("settings",0).getString("sim","");CallStore s=new CallStore(getApplicationContext());s.scan(getApplicationContext(),company,sim);s.upload();return Result.success();}
+  @Override public Result doWork(){
+   Context c=getApplicationContext();
+   String cid=c.getSharedPreferences("settings",0).getString("syncCompany","");
+   String sim=c.getSharedPreferences("settings",0).getString("syncSim","");
+   if(FirebaseAuth.getInstance().getUid()==null || cid.isEmpty() || sim.isEmpty())return Result.success();
+   CallStore s=new CallStore(c);s.scan(c,cid,sim);
+   return s.uploadBlocking()?Result.success():Result.retry();
+  }
  }
 }
