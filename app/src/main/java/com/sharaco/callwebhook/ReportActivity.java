@@ -93,7 +93,8 @@ public class ReportActivity extends Activity {
  String csv(String s){
   String value=s==null?"":s;
   if(!value.isEmpty() && "=+-@".indexOf(value.charAt(0))>=0)value="'"+value;
-  return "\\"" + value.replace("\\"","\\"\\"") + "\\"";
+  String quote=String.valueOf((char)34);
+  return quote+value.replace(quote,quote+quote)+quote;
  }
  @Override protected void onActivityResult(int request,int result,Intent data){
   super.onActivityResult(request,result,data);
