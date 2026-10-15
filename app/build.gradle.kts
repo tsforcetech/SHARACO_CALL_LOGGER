@@ -9,8 +9,25 @@ android {
         applicationId = "com.sharaco.callwebhook"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3.0"
+        versionCode = 5
+        versionName = "1.4.0"
+    }
+    val signingFile = System.getenv("SIGNING_KEYSTORE_PATH")
+    if (!signingFile.isNullOrBlank()) {
+        signingConfigs {
+            create("production") {
+                storeFile = file(signingFile)
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
+        buildTypes {
+            getByName("release") {
+                isMinifyEnabled = false
+                signingConfig = signingConfigs.getByName("production")
+            }
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
