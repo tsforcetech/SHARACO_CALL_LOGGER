@@ -31,6 +31,27 @@ service cloud.firestore {
     allow list: if owner(cid);
     allow update, delete: if owner(cid);
    }
+   match /assigned_numbers/{itemId} {
+    allow get, list: if owner(cid) || (active(cid) && resource.data.assignedTo == request.auth.uid);
+    allow create: if admin(cid)
+      && request.resource.data.keys().hasOnly(['phone','name','notes','assignedTo','status','createdBy','createdAt','updatedAt'])
+      && request.resource.data.phone is string
+      && request.resource.data.phone.size() >= 9
+      && request.resource.data.phone.size() <= 16
+      && request.resource.data.status == 'pending'
+      && request.resource.data.createdBy == request.auth.uid
+      && exists(/databases/$(database)/documents/companies/$(cid)/members/$(request.resource.data.assignedTo))
+      && get(/databases/$(database)/documents/companies/$(cid)/members/$(request.resource.data.assignedTo)).data.approved == true;
+    allow update: if active(cid)
+      && resource.data.assignedTo == request.auth.uid
+      && resource.data.status == 'pending'
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','contactedBy','contactedAt','outcome','updatedAt'])
+      && request.resource.data.status == 'contacted'
+      && request.resource.data.contactedBy == request.auth.uid
+      && request.resource.data.outcome is string
+      && request.resource.data.outcome.size() <= 1000;
+    allow delete: if false;
+   }
    match /call_logs/{callId} {
     allow get, list: if canReadCall(cid);
     allow create: if active(cid)
