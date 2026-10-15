@@ -61,7 +61,7 @@ public class MainActivity extends Activity {
    button("Local call history",()->localHistory());
    button("Enable call-log access",()->{if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS},12);else {CallStore.schedule(this);toast("Logging scheduled");}});
    button("Sync call history now",()->{store.scan(this,company,sim);store.upload();CallStore.schedule(this);toast("Sync started");});
-   button("My company report",()->report());
+   button("My company report",()->report());button("Assigned number worklist",()->{Intent i=new Intent(this,WorklistActivity.class);i.putExtra("company",company);startActivity(i);});
    if(role.equals("owner")||role.equals("admin")){button("Company QR code",()->showQr());button("Pending join requests",()->requests());button("Team call logs",()->teamLogs());if(role.equals("owner"))button("Manage team roles and assignments",()->manageTeam());}
   }).addOnFailureListener(e->toast(e.getMessage()));
  }
