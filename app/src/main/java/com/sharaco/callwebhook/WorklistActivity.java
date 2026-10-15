@@ -61,7 +61,7 @@ public class WorklistActivity extends Activity {
  }
  List<String> parseCSV(String line){List<String> out=new ArrayList<>();StringBuilder b=new StringBuilder();boolean quoted=false;for(int i=0;i<line.length();i++){char c=line.charAt(i);if(c=='"'){if(quoted&&i+1<line.length()&&line.charAt(i+1)=='"'){b.append('"');i++;}else quoted=!quoted;}else if(c==','&&!quoted){out.add(b.toString().trim());b.setLength(0);}else b.append(c);}out.add(b.toString().trim());return out;}
  void importRows(String to,int index){if(index>=csvRows.size()){msg("Import complete: "+added+" saved, "+failed+" failed");added=0;failed=0;csvRows.clear();showHome();return;}
- String[] row=csvRows.get(index);save(row[0],row[1],row[2],to,()->{added++;importRows(to,index+1);});
+ String[] row=csvRows.get(index);Map<String,Object> m=new HashMap<>();m.put("phone",row[0]);m.put("name",row[1]);m.put("notes",row[2]);m.put("assignedTo",to);m.put("status","pending");m.put("createdBy",uid);m.put("createdAt",FieldValue.serverTimestamp());m.put("updatedAt",FieldValue.serverTimestamp());numbers().add(m).addOnSuccessListener(d->{added++;importRows(to,index+1);}).addOnFailureListener(e->{failed++;importRows(to,index+1);});
  // Failed writes remain visible as errors and are not automatically retried.
  }
  void myList(){page("My Numbers");numbers().whereEqualTo("assignedTo",uid).limit(300).get().addOnSuccessListener(s->{
