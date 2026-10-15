@@ -62,7 +62,7 @@ public class MainActivity extends Activity {
    button("Enable call-log access",()->{if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS},12);else {CallStore.schedule(this);toast("Logging scheduled");}});
    button("Sync call history now",()->{store.scan(this,company,sim);store.upload();CallStore.schedule(this);toast("Sync started");});
    button("My company report",()->report());
-   if(role.equals("owner")||role.equals("admin")){button("Company QR code",()->showQr());button("Pending join requests",()->requests());button("Team call logs",()->teamLogs());}
+   if(role.equals("owner")||role.equals("admin")){button("Company QR code",()->showQr());button("Pending join requests",()->requests());button("Team call logs",()->teamLogs());if(role.equals("owner"))button("Manage team roles and assignments",()->manageTeam());}
   }).addOnFailureListener(e->toast(e.getMessage()));
  }
  void showQr(){db.collection("companies").document(company).get().addOnSuccessListener(d->{
@@ -90,6 +90,21 @@ public class MainActivity extends Activity {
    b.update(d.getReference(),"status","approved");b.commit().addOnSuccessListener(v->requests()).addOnFailureListener(e->toast(e.getMessage()));
   });}}).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());}
  @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==12 && checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED){CallStore.schedule(this);toast("Background sync scheduled");}else if(code==12)toast("Call-log access was not granted");}
+ void manageTeam(){page("Manage Company Team");
+  db.collection("companies").document(company).collection("members").get().addOnSuccessListener(s->{
+   for(DocumentSnapshot d:s){String id=d.getId();label(id+" | "+d.getString("role")+" | "+d.getString("sim"));
+    if(!id.equals(uid())){
+     button("Promote to admin: "+id.substring(0,Math.min(8,id.length())),()->d.getReference().update("role","admin").addOnSuccessListener(v->manageTeam()).addOnFailureListener(e->toast(e.getMessage())));
+     button("Set employee role: "+id.substring(0,Math.min(8,id.length())),()->d.getReference().update("role","employee").addOnSuccessListener(v->manageTeam()).addOnFailureListener(e->toast(e.getMessage())));
+    }
+   }
+   label("Assign call-log access by employee UID");EditText admin=input("Supervisor/admin UID"),target=input("Employee UID");
+   button("Grant employee access",()->{
+    String a=admin.getText().toString().trim(),t=target.getText().toString().trim();if(a.isEmpty()||t.isEmpty()){toast("Enter both UIDs");return;}
+    db.collection("companies").document(company).collection("members").document(a).update("assignedUsers",FieldValue.arrayUnion(t)).addOnSuccessListener(v->toast("Assigned")).addOnFailureListener(e->toast(e.getMessage()));
+   });
+  }).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());
+ }
  void localHistory(){page("Local SIM Call History");for(String row:store.history(company))label(row);button("Back",()->home());}
  void teamLogs(){page("Company Call Logs");db.collection("companies").document(company).collection("call_logs").orderBy("startedAt",Query.Direction.DESCENDING).limit(100).get().addOnSuccessListener(s->{for(DocumentSnapshot d:s)label(d.getString("remoteNumber")+" | "+d.getString("type")+" | "+d.getLong("durationSec")+" sec");}).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());}
  void report(){page("Call Summary");db.collection("companies").document(company).collection("call_logs").limit(1000).get().addOnSuccessListener(s->{
