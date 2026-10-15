@@ -76,7 +76,7 @@ public class MainActivity extends Activity {
     menuItem("▣","This Device","Register this phone in your company",()->openDevices());
     menuItem("◉","Lead Follow-ups","Update lead status and next actions",()->openCrm());
     menuItem("↻","Sync Now","Queue call history upload to Firebase",()->{if(!getSharedPreferences("settings",0).getBoolean("syncConsent",false) || !company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany",""))){syncPrivacy();return;}CallStore.schedule(this);toast("Background sync queued");});
-    menuItem("✓","Call Access","Grant Android call-history permissions",()->{if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS},12);else {CallStore.schedule(this);toast("Permission already granted");}});
+    menuItem("✓","Call Access","Grant Android call-history permissions",()->{if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS,Manifest.permission.READ_PHONE_STATE},12);else {CallStore.schedule(this);toast("Permission already granted");}});
   }else if(type.equals("team")){
     sectionTitle("Team administration");
     menuItem("▦","Company QR Code","Invite employees to this company",()->showQr());
@@ -213,6 +213,7 @@ public class MainActivity extends Activity {
   boolean permission=checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED;
   label("Android call-log permission: "+(permission?"Granted":"Not granted"));
   label("My SIM: "+(sim.isEmpty()?"Not registered":sim));
+  label("Call attribution check: "+(CallStore.safeSingleSim(this)?"One active SIM verified":"Not verified. Sync will pause until one active SIM and Phone permission are available."));
   label("Android schedules periodic work approximately every 15 minutes. Battery optimization, connectivity, sign-in and device policies can delay sync.");
   label("Automatic upload consent: "+(getSharedPreferences("settings",0).getBoolean("syncConsent",false)?"Enabled":"Disabled"));
   button("Queue upload now",()->{if(!getSharedPreferences("settings",0).getBoolean("syncConsent",false)){toast("Enable sync consent first");return;}CallStore.schedule(this);toast("Sync queued");});
@@ -239,6 +240,7 @@ public class MainActivity extends Activity {
   label("When enabled, Sharaco reads call history (phone numbers, contact names if contacts permission is granted, call type, time and duration) and uploads it to the selected company's Firebase database.");
   label("Background sync is scheduled about every 15 minutes when Android permits. Your company owner and admins can access company call metadata.");
   label("You can pause future synchronization here. Previously uploaded records are not deleted automatically.");
+  label("Accuracy safeguard: call uploads are paused on dual-SIM and unverifiable devices until SIM-specific attribution is supported.");
   boolean enabled=getSharedPreferences("settings",0).getBoolean("syncConsent",false) && company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany",""));
   label("Current setting: "+(enabled?"Enabled":"Disabled"));
   button("Enable Automatic Sync",()->{getSharedPreferences("settings",0).edit().putBoolean("syncConsent",true).putString("syncConsentCompany",company).putLong("syncConsentStartedAt",System.currentTimeMillis()).apply();if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS},12);else CallStore.schedule(this);toast("Automatic sync enabled");syncPrivacy();});
