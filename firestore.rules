@@ -32,7 +32,7 @@ service cloud.firestore {
     allow update, delete: if owner(cid);
    }
    match /assigned_numbers/{itemId} {
-    allow get, list: if owner(cid) || (active(cid) && resource.data.assignedTo == request.auth.uid);
+    allow get, list: if admin(cid) || (active(cid) && resource.data.assignedTo == request.auth.uid);
     allow create: if admin(cid)
       && request.resource.data.keys().hasOnly(['phone','name','notes','assignedTo','status','createdBy','createdAt','updatedAt'])
       && request.resource.data.phone is string
