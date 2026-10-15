@@ -158,7 +158,7 @@ public class MainActivity extends Activity {
   DocumentReference d=db.collection("companies").document();
   Map<String,Object> member=new HashMap<>();member.put("uid",uid());member.put("role","owner");member.put("approved",true);member.put("sim","");member.put("assignedUsers",new ArrayList<String>());
   WriteBatch b=db.batch();b.set(d,c);b.set(d.collection("members").document(uid()),member);
-  b.set(db.collection("users").document(uid()).collection("companies").document(d.getId()),new HashMap<String,Object>(){{put("name",n);put("role","owner");put("status","approved");put("updatedAt",FieldValue.serverTimestamp());}});b.commit().addOnSuccessListener(v->{choose(d.getId(),"");}).addOnFailureListener(e->toast(e.getMessage()));
+  b.commit().addOnSuccessListener(v->{Map<String,Object> index=new HashMap<>();index.put("name",n);index.put("role","owner");index.put("status","approved");index.put("updatedAt",FieldValue.serverTimestamp());db.collection("users").document(uid()).collection("companies").document(d.getId()).set(index);choose(d.getId(),"");}).addOnFailureListener(e->toast(e.getMessage()));
  });button("Back",()->home());}
  void showMyCompanies(){
   db.collection("companies").whereEqualTo("ownerUid",uid()).get().addOnSuccessListener(s->{
@@ -263,7 +263,7 @@ public class MainActivity extends Activity {
   for(DocumentSnapshot d:s){label(d.getString("name")+" | "+d.getString("sim"));button("Approve "+d.getString("name"),()->{
    Map<String,Object> m=new HashMap<>();m.put("uid",d.getId());m.put("role","employee");m.put("approved",true);m.put("sim",d.getString("sim"));m.put("assignedUsers",new ArrayList<String>());
    WriteBatch b=db.batch();b.set(db.collection("companies").document(company).collection("members").document(d.getId()),m);
-   b.update(d.getReference(),"status","approved");Map<String,Object> directory=new HashMap<>();directory.put("name",company);directory.put("role","employee");directory.put("status","approved");directory.put("updatedAt",FieldValue.serverTimestamp());b.set(db.collection("users").document(d.getId()).collection("companies").document(company),directory);b.commit().addOnSuccessListener(v->requests()).addOnFailureListener(e->toast(e.getMessage()));
+   b.update(d.getReference(),"status","approved");Map<String,Object> directory=new HashMap<>();directory.put("name",company);directory.put("role","employee");directory.put("status","approved");directory.put("updatedAt",FieldValue.serverTimestamp());b.commit().addOnSuccessListener(v->{db.collection("users").document(d.getId()).collection("companies").document(company).set(directory);requests();}).addOnFailureListener(e->toast(e.getMessage()));
   });}}).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());}
  @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==12 && checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED){CallStore.schedule(this);toast("Automatic background sync scheduled");}else if(code==12)toast("Call-log access was not granted");}
  void manageTeam(){if(!isAdmin()){toast("Access denied");return;}page("Manage Company Team");
