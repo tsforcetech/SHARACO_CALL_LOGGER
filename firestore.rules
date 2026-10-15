@@ -56,6 +56,17 @@ service cloud.firestore {
       && request.resource.data.get('contactedBy',request.auth.uid) == request.auth.uid;
     allow delete: if false;
    }
+   match /devices/{deviceId} {
+    allow get, list: if admin(cid) || (active(cid) && resource.data.uid == request.auth.uid);
+    allow create: if active(cid)
+      && request.resource.data.uid == request.auth.uid
+      && request.resource.data.keys().hasOnly(['uid','model','androidVersion','lastSeen','status'])
+      && request.resource.data.status == 'active';
+    allow update: if admin(cid)
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+      && request.resource.data.status in ['active','inactive'];
+    allow delete: if owner(cid);
+   }
    match /call_logs/{callId} {
     allow get, list: if canReadCall(cid);
     allow create: if active(cid)
