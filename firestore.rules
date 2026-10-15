@@ -66,6 +66,16 @@ service cloud.firestore {
     allow update, delete: if false;
    }
   }
+  match /users/{userId}/companies/{companyId} {
+    allow get, list: if signed() && request.auth.uid == userId;
+    allow create: if signed()
+      && request.resource.data.keys().hasOnly(['name','role','status','updatedAt'])
+      && request.resource.data.status == 'approved'
+      && ((userId == request.auth.uid && getAfter(/databases/$(database)/documents/companies/$(companyId)).data.ownerUid == userId)
+          || (admin(companyId) && getAfter(/databases/$(database)/documents/companies/$(companyId)/members/$(userId)).data.approved == true));
+    allow update: if admin(companyId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','role','status','updatedAt']);
+    allow delete: if owner(companyId);
+  }
   match /{other=**} { allow read, write: if false; }
  }
 }
