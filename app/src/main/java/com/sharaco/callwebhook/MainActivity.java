@@ -66,6 +66,7 @@ public class MainActivity extends Activity {
   section=type;page(type.equals("calls")?"Call Activity":type.equals("team")?"Team Management":type.equals("reports")?"Reports & Insights":"Settings");
   if(type.equals("calls")){
     sectionTitle("Your calling workspace");
+    menuItem("♙","My SIM Number","Register your own company calling number",()->ownSim());
     menuItem("☏","Assigned Numbers","View numbers and update contacted status",()->{Intent i=new Intent(this,WorklistActivity.class);i.putExtra("company",company);startActivity(i);});
     menuItem("◷","Call History","Review calls saved on this device",()->localHistory());
     menuItem("↻","Sync Now","Read permitted call history and sync",()->{store.scan(this,company,sim);store.upload();CallStore.schedule(this);toast("Sync requested");});
@@ -81,8 +82,8 @@ public class MainActivity extends Activity {
     if("owner".equals(role)||"admin".equals(role))menuItem("☷","Team Calls","Review calls from authorized agents",()->teamLogs());
   }else{
     sectionTitle("Account & company");
-    menuItem("▤","Switch Company","Choose a different workspace",()->{company="";getSharedPreferences("settings",0).edit().remove("company").apply();section="";home();});
-    menuItem("⇥","Sign Out","Sign out of Google and Sharaco",()->{auth.signOut();company="";getSharedPreferences("settings",0).edit().remove("company").apply();GoogleSignIn.getClient(this,new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()).signOut();section="";home();});
+    menuItem("▤","Switch Company","Choose a different workspace",()->home());
+    menuItem("⇥","Sign Out","Sign out of Google and Sharaco",()->{auth.signOut();company="";getSharedPreferences("settings",0).edit().clear().apply();section="";home();});
   }
  }
  void toast(String msg){Toast.makeText(this,msg,Toast.LENGTH_LONG).show();}
@@ -96,17 +97,21 @@ public class MainActivity extends Activity {
  }
  String uid(){return auth.getUid();}
  @Override public void onCreate(Bundle b){super.onCreate(b);auth=FirebaseAuth.getInstance();db=FirebaseFirestore.getInstance();store=new CallStore(this);company=getSharedPreferences("settings",0).getString("company","");sim=getSharedPreferences("settings",0).getString("sim","");home();}
- void home(){page("Sharaco Call Logger");
-  ImageView brand=new ImageView(this);brand.setImageResource(com.sharaco.callwebhook.R.drawable.sharaco_mark);brand.setAdjustViewBounds(true);
-  LinearLayout.LayoutParams logoParams=new LinearLayout.LayoutParams(-1,132);logoParams.setMargins(0,3,0,6);
-  panel.addView(brand,logoParams);
+ void home(){
+  section="";company="";getSharedPreferences("settings",0).edit().remove("company").apply();
+  page("Sharaco Call Logger");
+  ImageView brand=new ImageView(this);brand.setImageResource(R.drawable.sharaco_mark);brand.setAdjustViewBounds(true);
+  LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,110);panel.addView(brand,lp);
   if(uid()==null){login();return;}
-  label("Welcome  •  "+auth.getCurrentUser().getEmail());
-  button("＋  Create a company",()->createCompany());
-  button("▦  Join a team using QR",()->scanJoin());
-  String pending=getSharedPreferences("settings",0).getString("pendingCompany","");if(!pending.isEmpty())button("Check joined company approval",()->choose(pending,""));
-  if(!company.isEmpty())companyHome();else showMyCompanies();
-  button("Sign out",()->{auth.signOut();company="";getSharedPreferences("settings",0).edit().remove("company").apply();GoogleSignIn.getClient(this,new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()).signOut();home();});
+  label("Signed in as "+auth.getCurrentUser().getEmail());
+  sectionTitle("Your companies");
+  showMyCompanies();
+  sectionTitle("Company actions");
+  menuItem("＋","Create Company","Start a new company workspace",()->createCompany());
+  menuItem("▦","Join Company","Scan the QR code supplied by your manager",()->scanJoin());
+  String pending=getSharedPreferences("settings",0).getString("pendingCompany","");
+  if(!pending.isEmpty())menuItem("✓","Check Join Approval","Open a company after owner approval",()->choose(pending,""));
+  button("Sign out",()->{auth.signOut();company="";getSharedPreferences("settings",0).edit().clear().apply();home();});
  }
  void login(){
    label("Welcome to Sharaco Call Logger");
@@ -140,7 +145,7 @@ public class MainActivity extends Activity {
      String backTo=section;section="";
      if(currentScreen.equals("Call Activity")||currentScreen.equals("Team Management")||currentScreen.equals("Reports & Insights")||currentScreen.equals("Settings"))home();
      else showSection(backTo);
-   }else home();
+   }else if(currentScreen.equals("Company Workspace"))home();else if(!company.isEmpty())companyHome();else home();
  }
  void createCompany(){page("Create Company");EditText name=input("Company name");button("Save company",()->{
   String n=name.getText().toString().trim();if(n.isEmpty()){toast("Company name required");return;}
@@ -151,12 +156,25 @@ public class MainActivity extends Activity {
   WriteBatch b=db.batch();b.set(d,c);b.set(d.collection("members").document(uid()),member);
   b.commit().addOnSuccessListener(v->{choose(d.getId(),"");}).addOnFailureListener(e->toast(e.getMessage()));
  });button("Back",()->home());}
- void showMyCompanies(){label("My companies");db.collection("companies").whereEqualTo("ownerUid",uid()).get().addOnSuccessListener(s->{for(DocumentSnapshot d:s)button("Open "+d.getString("name"),()->choose(d.getId(),""));});
-  label("If you have joined a team, use Check joined company approval above to reopen it.");
+ void showMyCompanies(){
+  db.collection("companies").whereEqualTo("ownerUid",uid()).get()
+    .addOnSuccessListener(s->{
+      if(s.isEmpty())label("You have not created a company yet.");
+      for(DocumentSnapshot d:s)menuItem("▣",d.getString("name")==null?"Company":d.getString("name"),"Owner  ·  Open company workspace",()->choose(d.getId(),""));
+    }).addOnFailureListener(e->toast("Unable to load companies: "+e.getLocalizedMessage()));
+  // Joined companies are remembered for quick access; access is rechecked in Firestore.
+  String joined=getSharedPreferences("settings",0).getString("pendingCompany","");
+  if(!joined.isEmpty())menuItem("♙","Joined Company","Open your membership or check approval",()->choose(joined,""));
  }
- void choose(String cid,String ownSim){company=cid;sim=ownSim;getSharedPreferences("settings",0).edit().putString("company",company).putString("sim",sim).apply();home();}
+ void choose(String cid,String ownSim){
+  company=cid;section="";getSharedPreferences("settings",0).edit().putString("company",cid).apply();
+  companyHome();
+}
  void companyHome(){
-  label("Your workspace  •  Select a category");
+  page("Company Workspace");
+  menuItem("‹","All Companies","Back to company selection",()->home());
+  db.collection("companies").document(company).get().addOnSuccessListener(d->label("Company: "+d.getString("name")));
+  label("Choose a company operation");
   db.collection("companies").document(company).collection("members").document(uid()).get().addOnSuccessListener(doc->{
    if(!Boolean.TRUE.equals(doc.getBoolean("approved"))){label("Awaiting owner approval");return;}
    role=doc.getString("role");sim=doc.getString("sim")==null?"":doc.getString("sim");
@@ -168,6 +186,20 @@ public class MainActivity extends Activity {
    menuItem("⚙","Settings & Account","Switch company and sign out",()->showSection("settings"));
    label("Role: "+role+"   •   SIM: "+(sim.isEmpty()?"Not registered":sim));
   }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
+ }
+ void ownSim(){
+  page("My Company SIM Number");
+  label("This number is used for recording company calls. Include country code.");
+  EditText number=input("+971501234567");
+  db.collection("companies").document(company).collection("members").document(uid()).get()
+     .addOnSuccessListener(d->{String existing=d.getString("sim");if(existing!=null)number.setText(existing);});
+  button("Save SIM number",()->{
+    String value=number.getText().toString().trim().replace(" ","");
+    if(!value.matches("\\+[0-9]{8,15}")){number.setError("Use +countrycode and 8–15 digits");return;}
+    db.collection("companies").document(company).collection("members").document(uid()).update("sim",value)
+       .addOnSuccessListener(v->{sim=value;getSharedPreferences("settings",0).edit().putString("sim",value).apply();toast("SIM number saved");showSection("calls");})
+       .addOnFailureListener(e->toast("Unable to save SIM: "+e.getLocalizedMessage()));
+  });
  }
  void showQr(){db.collection("companies").document(company).get().addOnSuccessListener(d->{
    String token=d.getString("joinToken");if(token==null){toast("QR not available");return;}
