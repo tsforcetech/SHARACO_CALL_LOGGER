@@ -26,7 +26,7 @@ public class MainActivity extends Activity {
  void page(String title){panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(24,24,24,24);ScrollView sv=new ScrollView(this);sv.addView(panel);setContentView(sv);label(title);}
  String uid(){return auth.getUid();}
  @Override public void onCreate(Bundle b){super.onCreate(b);auth=FirebaseAuth.getInstance();db=FirebaseFirestore.getInstance();store=new CallStore(this);company=getSharedPreferences("settings",0).getString("company","");sim=getSharedPreferences("settings",0).getString("sim","");home();}
- void home(){page("SHARACO CALL LOGGER");
+ void home(){page("Sharaco Call Logger"); ImageView brand=new ImageView(this);brand.setImageResource(com.sharaco.callwebhook.R.drawable.sharaco_mark);brand.setAdjustViewBounds(true);brand.setMaxHeight(190);panel.addView(brand);
   if(uid()==null){login();return;}
   label(auth.getCurrentUser().getEmail());button("Sign out",()->{auth.signOut();company="";home();});
   button("Create company",()->createCompany());
