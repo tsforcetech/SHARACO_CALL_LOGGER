@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "205964404683-6akfrd9dfthqvja3qtqbbbobe5fak1ik.apps.googleusercontent.com",
+          "client_id": "205964404683-dnam2n986kin06donda5t31oqb0sb49g.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.sharaco.callwebhook",
-            "certificate_hash": "63cb17c5994a65fe7804f93b983ed9095279f2c2"
+            "certificate_hash": "13638ed4ea4cfbb97950f4902773127bdc6b1381"
           }
         },
         {
