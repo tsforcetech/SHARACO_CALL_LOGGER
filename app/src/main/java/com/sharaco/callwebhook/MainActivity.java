@@ -34,9 +34,16 @@ public class MainActivity extends Activity {
  boolean signingIn=false;
  int teal=Color.rgb(0,171,143);
  GradientDrawable rounded(int color,int r){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(r);return d;}
- void label(String s){TextView v=new TextView(this);v.setText(s);v.setTextColor(Color.rgb(32,48,53));v.setTextSize(16);v.setPadding(4,14,4,10);panel.addView(v);}
+ void label(String s){TextView v=new TextView(this);v.setText(s);v.setTextColor(Color.rgb(32,48,53));v.setTextSize(16);v.setPadding(16,14,16,10);panel.addView(v);}
  EditText input(String hint){EditText v=new EditText(this);v.setHint(hint);panel.addView(v);return v;}
- void button(String s,Runnable job){Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(15);b.setTextColor(Color.WHITE);b.setBackground(rounded(teal,26));LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);bp.setMargins(0,5,0,9);panel.addView(b,bp);b.setOnClickListener(v->job.run());}
+ void button(String s,Runnable job){
+  Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(15);
+  boolean back=s.startsWith("‹")||s.equals("Back")||s.equals("Sign out")||s.equals("Change company");
+  b.setTextColor(back?Color.rgb(22,79,74):Color.WHITE);
+  b.setBackground(rounded(back?Color.rgb(228,243,239):teal,28));b.setMinHeight(56);
+  LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);bp.setMargins(0,7,0,7);
+  panel.addView(b,bp);b.setOnClickListener(v->job.run());
+}
  void toast(String msg){Toast.makeText(this,msg,Toast.LENGTH_LONG).show();}
  void page(String title){
   currentScreen=title;
@@ -48,13 +55,17 @@ public class MainActivity extends Activity {
  }
  String uid(){return auth.getUid();}
  @Override public void onCreate(Bundle b){super.onCreate(b);auth=FirebaseAuth.getInstance();db=FirebaseFirestore.getInstance();store=new CallStore(this);company=getSharedPreferences("settings",0).getString("company","");sim=getSharedPreferences("settings",0).getString("sim","");home();}
- void home(){page("Sharaco Call Logger"); ImageView brand=new ImageView(this);brand.setImageResource(com.sharaco.callwebhook.R.drawable.sharaco_mark);brand.setAdjustViewBounds(true);brand.setMaxHeight(190);panel.addView(brand);
+ void home(){page("Sharaco Call Logger");
+  ImageView brand=new ImageView(this);brand.setImageResource(com.sharaco.callwebhook.R.drawable.sharaco_mark);brand.setAdjustViewBounds(true);
+  LinearLayout.LayoutParams logoParams=new LinearLayout.LayoutParams(-1,132);logoParams.setMargins(0,3,0,6);
+  panel.addView(brand,logoParams);
   if(uid()==null){login();return;}
-  label(auth.getCurrentUser().getEmail());button("Sign out",()->{auth.signOut();company="";home();});
-  button("Create company",()->createCompany());
-  button("Join company (QR)",()->scanJoin());
+  label("Welcome  •  "+auth.getCurrentUser().getEmail());
+  button("＋  Create a company",()->createCompany());
+  button("▦  Join a team using QR",()->scanJoin());
   String pending=getSharedPreferences("settings",0).getString("pendingCompany","");if(!pending.isEmpty())button("Check joined company approval",()->choose(pending,""));
   if(!company.isEmpty())companyHome();else showMyCompanies();
+  button("Sign out",()->{auth.signOut();company="";getSharedPreferences("settings",0).edit().remove("company").apply();GoogleSignIn.getClient(this,new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()).signOut();home();});
  }
  void login(){
    label("Welcome to Sharaco Call Logger");
@@ -95,22 +106,22 @@ public class MainActivity extends Activity {
   WriteBatch b=db.batch();b.set(d,c);b.set(d.collection("members").document(uid()),member);
   b.commit().addOnSuccessListener(v->{choose(d.getId(),"");}).addOnFailureListener(e->toast(e.getMessage()));
  });button("Back",()->home());}
- void showMyCompanies(){label("Companies I own");db.collection("companies").whereEqualTo("ownerUid",uid()).get().addOnSuccessListener(s->{for(DocumentSnapshot d:s)button("Open "+d.getString("name"),()->choose(d.getId(),""));});
-  label("My approved memberships"); // Memberships in other companies can be opened using the QR scan again.
+ void showMyCompanies(){label("My companies");db.collection("companies").whereEqualTo("ownerUid",uid()).get().addOnSuccessListener(s->{for(DocumentSnapshot d:s)button("Open "+d.getString("name"),()->choose(d.getId(),""));});
+  label("If you have joined a team, use Check joined company approval above to reopen it.");
  }
  void choose(String cid,String ownSim){company=cid;sim=ownSim;getSharedPreferences("settings",0).edit().putString("company",company).putString("sim",sim).apply();home();}
  void companyHome(){
-  label("Company ID: "+company);button("Change company",()->{company="";getSharedPreferences("settings",0).edit().remove("company").apply();home();});
+  label("Your team dashboard");button("Change company",()->{company="";getSharedPreferences("settings",0).edit().remove("company").apply();home();});
   db.collection("companies").document(company).collection("members").document(uid()).get().addOnSuccessListener(doc->{
    if(!Boolean.TRUE.equals(doc.getBoolean("approved"))){label("Awaiting owner approval (or membership not yet created)");return;}
    role=doc.getString("role");sim=doc.getString("sim")==null?"":doc.getString("sim");
    getSharedPreferences("settings",0).edit().putString("sim",sim).apply();
    label("Role: "+role+" | Company SIM: "+sim);
-   button("Local call history",()->localHistory());
+   button("◷  My call history",()->localHistory());
    button("Enable call-log access",()->{if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS},12);else {CallStore.schedule(this);toast("Logging scheduled");}});
-   button("Sync call history now",()->{store.scan(this,company,sim);store.upload();CallStore.schedule(this);toast("Sync started");});
-   button("My company report",()->report());button("Assigned number worklist",()->{Intent i=new Intent(this,WorklistActivity.class);i.putExtra("company",company);startActivity(i);});
-   if(role.equals("owner")||role.equals("admin")){button("Company QR code",()->showQr());button("Pending join requests",()->requests());button("Team call logs",()->teamLogs());if(role.equals("owner"))button("Manage team roles and assignments",()->manageTeam());}
+   button("↻  Sync call history now",()->{store.scan(this,company,sim);store.upload();CallStore.schedule(this);toast("Sync started");});
+   button("▥  Call summary & reports",()->report());button("☏  Assigned numbers & follow-ups",()->{Intent i=new Intent(this,WorklistActivity.class);i.putExtra("company",company);startActivity(i);});
+   if(role.equals("owner")||role.equals("admin")){button("▦  Company joining QR",()->showQr());button("✓  Approve team members",()->requests());button("☷  Team call activity",()->teamLogs());if(role.equals("owner"))button("⚙  Manage team & permissions",()->manageTeam());}
   }).addOnFailureListener(e->toast(e.getMessage()));
  }
  void showQr(){db.collection("companies").document(company).get().addOnSuccessListener(d->{
