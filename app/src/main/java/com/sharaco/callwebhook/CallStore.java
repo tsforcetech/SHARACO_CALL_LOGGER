@@ -63,27 +63,15 @@ public class CallStore extends SQLiteOpenHelper {
  }
  public synchronized ArrayList<String> history(String company){
   ArrayList<String> a=new ArrayList<>();
-  try(Cursor x=getReadableDatabase().rawQuery("SELECT remote,contact,calltype,duration,startms,uploaded FROM calls WHERE company=? ORDER BY startms DESC LIMIT 200",new String[]{company})){
+  try(Cursor x=getReadableDatabase().rawQuery("SELECT remote,contact,calltype,duration,startms,uploaded FROM calls WHERE company=? AND uid=? ORDER BY startms DESC LIMIT 200",new String[]{company,FirebaseAuth.getInstance().getUid()==null?"":FirebaseAuth.getInstance().getUid()})){
    while(x.moveToNext())a.add((x.getString(1).isEmpty()?x.getString(0):x.getString(1)+" ("+x.getString(0)+")")+" | "+x.getString(2)+" | "+x.getLong(3)+"s | "+new java.util.Date(x.getLong(4))+" | "+(x.getInt(5)==1?"SYNCED":"PENDING"));
   }return a;
  }
- public synchronized void upload(){
-  String uid=FirebaseAuth.getInstance().getUid();if(uid==null)return;
-  try(Cursor x=getReadableDatabase().rawQuery("SELECT id,company,uid,sim,remote,contact,calltype,startms,duration FROM calls WHERE uploaded=0 AND uid=? ORDER BY startms ASC LIMIT 100",new String[]{uid})){
-   while(x.moveToNext()){
-    String id=x.getString(0),company=x.getString(1),owner=x.getString(2),sim=x.getString(3),remote=x.getString(4),contact=x.getString(5),type=x.getString(6);
-    long start=x.getLong(7),dur=x.getLong(8);
-    Map<String,Object> m=new HashMap<>();m.put("uid",owner);m.put("companyId",company);m.put("sim",sim);m.put("remoteNumber",remote==null?"":remote);m.put("fromNumber",type.equals("OUTGOING")?sim:remote);m.put("toNumber",type.equals("OUTGOING")?remote:sim);m.put("contactName",contact==null?"":contact);m.put("type",type);m.put("startedAt",start);m.put("durationSec",dur);m.put("createdAt",com.google.firebase.firestore.FieldValue.serverTimestamp());m.put("deviceCallId",id);
-    FirebaseFirestore.getInstance().collection("companies").document(company).collection("call_logs").document(id).set(m)
-    .addOnSuccessListener(v->{ContentValues done=new ContentValues();done.put("uploaded",1);getWritableDatabase().update("calls",done,"id=?",new String[]{id});});
-   }
-  }catch(Exception ignored){}
- }
  public synchronized int countPending(String cid){
-  int result=0;try(Cursor x=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM calls WHERE company=? AND uploaded=0",new String[]{cid})){if(x.moveToFirst())result=x.getInt(0);}return result;
+  int result=0;try(Cursor x=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM calls WHERE company=? AND uid=? AND uploaded=0",new String[]{cid,FirebaseAuth.getInstance().getUid()==null?"":FirebaseAuth.getInstance().getUid()})){if(x.moveToFirst())result=x.getInt(0);}return result;
  }
  public synchronized int countSynced(String cid){
-  int result=0;try(Cursor x=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM calls WHERE company=? AND uploaded=1",new String[]{cid})){if(x.moveToFirst())result=x.getInt(0);}return result;
+  int result=0;try(Cursor x=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM calls WHERE company=? AND uid=? AND uploaded=1",new String[]{cid,FirebaseAuth.getInstance().getUid()==null?"":FirebaseAuth.getInstance().getUid()})){if(x.moveToFirst())result=x.getInt(0);}return result;
  }
  public static long lastSync(Context c){return c.getSharedPreferences("settings",0).getLong("lastSync",0);}
  public synchronized boolean uploadBlocking(String companyId,long consentStartedAt){
@@ -138,8 +126,8 @@ public class CallStore extends SQLiteOpenHelper {
     String deviceId=c.getSharedPreferences("device_install",0).getString("deviceId","");
     if(!deviceId.isEmpty()){
       DocumentSnapshot device=Tasks.await(FirebaseFirestore.getInstance().collection("companies").document(cid).collection("devices").document(FirebaseAuth.getInstance().getUid()+"_"+deviceId).get(),30,TimeUnit.SECONDS);
-      if(device.exists() && !"active".equals(device.getString("status")))return Result.success();
-    }
+      if(!device.exists() || !"active".equals(device.getString("status")) || !FirebaseAuth.getInstance().getUid().equals(device.getString("uid")))return Result.success();
+    }else return Result.success();
    }catch(Exception e){return Result.retry();}
    if(!CallStore.safeSingleSim(c))return Result.success();
    CallStore s=new CallStore(c);s.scan(c,cid,sim);
