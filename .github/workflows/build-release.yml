@@ -36,7 +36,8 @@ jobs:
       - name: Build signed release
         run: gradle :app:assembleRelease --no-daemon
       - name: Show signing certificate fingerprint
-        run: "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
