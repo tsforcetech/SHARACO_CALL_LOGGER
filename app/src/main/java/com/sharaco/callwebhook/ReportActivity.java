@@ -21,6 +21,13 @@ public class ReportActivity extends Activity {
  LinearLayout root;
  EditText from,to;
  ArrayList<String[]> rows=new ArrayList<>();
+ boolean loading=false;
+ int fetched=0;
+ int incoming=0,outgoing=0,missed=0;
+ long totalDuration=0;
+ Query reportQuery;
+ DocumentSnapshot cursor;
+ TextView summary;
  void label(String message){TextView t=new TextView(this);t.setText(message);t.setTextColor(Color.rgb(45,69,72));t.setTextSize(16);t.setPadding(0,14,0,9);root.addView(t);}
  void button(String title,Runnable task){Button b=new Button(this);b.setText(title);b.setAllCaps(false);b.setTextColor(Color.WHITE);GradientDrawable d=new GradientDrawable();d.setColor(Color.rgb(0,171,143));d.setCornerRadius(28);b.setBackground(d);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,8,0,8);root.addView(b,lp);b.setOnClickListener(v->task.run());}
  void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
@@ -38,6 +45,8 @@ public class ReportActivity extends Activity {
   from=new EditText(this);from.setHint("From date · YYYY-MM-DD");root.addView(from);
   to=new EditText(this);to.setHint("To date · YYYY-MM-DD");root.addView(to);
   button("Load company calls",()->load());
+  button("Load next 500 calls",()->loadNext());
+  summary=new TextView(this);summary.setTextSize(16);summary.setTextColor(Color.rgb(15,88,80));root.addView(summary);
   button("Export filtered CSV",()->{if(rows.isEmpty()){toast("Load records before exporting");return;}Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("text/csv");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"sharaco_calls.csv");startActivityForResult(i,SAVE_CSV);});
   button("Back",()->finish());
  }
@@ -50,19 +59,30 @@ public class ReportActivity extends Activity {
   Long begin=dateMs(from.getText().toString().trim()),end=dateMs(to.getText().toString().trim());
   if((begin!=null&&begin<0)||(end!=null&&end<0)){toast("Use valid dates in YYYY-MM-DD format");return;}
   if(begin!=null&&end!=null&&begin>end){toast("From date must be before To date");return;}
-  rows.clear();
-  db.collection("companies").document(cid).collection("call_logs").limit(1000).get().addOnSuccessListener(s->{
-   int incoming=0,outgoing=0,missed=0;long total=0;
+  if(loading)return;
+  rows.clear();fetched=0;incoming=0;outgoing=0;missed=0;totalDuration=0;cursor=null;
+  reportQuery=db.collection("companies").document(cid).collection("call_logs").orderBy("startedAt",Query.Direction.DESCENDING);
+  if(begin!=null)reportQuery=reportQuery.whereGreaterThanOrEqualTo("startedAt",begin);
+  if(end!=null)reportQuery=reportQuery.whereLessThan("startedAt",end+86400000L);
+  summary.setText("Loading filtered calls...");
+  loadNext();
+ }
+ void loadNext(){
+  if(loading)return;
+  if(reportQuery==null){toast("Select Load company calls first");return;}
+  loading=true;
+  Query q=reportQuery.limit(500);if(cursor!=null)q=q.startAfter(cursor);
+  q.get().addOnSuccessListener(s->{
+   loading=false;fetched+=s.size();
    for(DocumentSnapshot d:s){
     Long at=d.getLong("startedAt");if(at==null)continue;
-    if(begin!=null&&at<begin)continue;if(end!=null&&at>=end+86400000L)continue;
     String type=d.getString("type");if("INCOMING".equals(type))incoming++;if("OUTGOING".equals(type))outgoing++;if("MISSED".equals(type))missed++;
-    Long duration=d.getLong("durationSec");long seconds=duration==null?0:duration;total+=seconds;
+    Long duration=d.getLong("durationSec");long seconds=duration==null?0:duration;totalDuration+=seconds;
     rows.add(new String[]{d.getString("uid"),d.getString("sim"),d.getString("remoteNumber"),type,String.valueOf(at),String.valueOf(seconds),d.getString("contactName")});
    }
-   label("Matching calls: "+rows.size()+" · Incoming "+incoming+" · Outgoing "+outgoing+" · Missed "+missed+" · Duration "+(total/60)+" minutes");
-   if(s.size()==1000)label("Note: report currently processes a maximum of 1,000 company calls. Export does not represent a complete history beyond this limit.");
-  }).addOnFailureListener(e->toast("Report error: "+e.getLocalizedMessage()));
+   if(!s.isEmpty())cursor=s.getDocuments().get(s.size()-1);
+   summary.setText("Loaded: "+rows.size()+" calls | Incoming "+incoming+" | Outgoing "+outgoing+" | Missed "+missed+" | Duration "+(totalDuration/60)+" minutes"+(s.size()<500?" | End of records":" | More pages available"));
+  }).addOnFailureListener(e->{loading=false;toast("Report error: "+e.getLocalizedMessage());});
  }
  String csv(String s){return "\"" +(s==null?"":s.replace("\"","\"\""))+"\"";}
  @Override protected void onActivityResult(int request,int result,Intent data){
