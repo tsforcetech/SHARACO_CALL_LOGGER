@@ -30,6 +30,7 @@ public class MainActivity extends Activity {
  LinearLayout panel; FirebaseAuth auth;FirebaseFirestore db;CallStore store;
  String company="",sim="",role="";
  String currentScreen="";
+ String section="";
  static final int GOOGLE_REQUEST=712;
  boolean signingIn=false;
  int teal=Color.rgb(0,171,143);
@@ -44,6 +45,46 @@ public class MainActivity extends Activity {
   LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);bp.setMargins(0,7,0,7);
   panel.addView(b,bp);b.setOnClickListener(v->job.run());
 }
+ void sectionTitle(String text){
+  TextView t=new TextView(this);t.setText(text.toUpperCase(java.util.Locale.ROOT));t.setTextColor(Color.rgb(93,117,119));t.setTextSize(12);t.setLetterSpacing(.12f);t.setTypeface(null,Typeface.BOLD);t.setPadding(8,20,8,8);panel.addView(t);
+ }
+ void menuItem(String icon,String title,String subtitle,Runnable action){
+  LinearLayout outer=new LinearLayout(this);outer.setOrientation(LinearLayout.HORIZONTAL);outer.setGravity(Gravity.CENTER_VERTICAL);
+  GradientDrawable bg=rounded(Color.WHITE,34);bg.setStroke(1,Color.rgb(229,236,236));outer.setBackground(bg);
+  outer.setPadding(18,18,16,18);
+  TextView emblem=new TextView(this);emblem.setText(icon);emblem.setGravity(Gravity.CENTER);emblem.setTextSize(24);emblem.setTextColor(teal);
+  emblem.setBackground(rounded(Color.rgb(229,248,242),22));LinearLayout.LayoutParams il=new LinearLayout.LayoutParams(54,54);outer.addView(emblem,il);
+  LinearLayout texts=new LinearLayout(this);texts.setOrientation(1);texts.setPadding(18,0,4,0);
+  TextView a=new TextView(this);a.setText(title);a.setTextSize(16);a.setTextColor(Color.rgb(29,56,60));a.setTypeface(null,Typeface.BOLD);texts.addView(a);
+  TextView b=new TextView(this);b.setText(subtitle);b.setTextSize(12);b.setTextColor(Color.rgb(117,134,138));texts.addView(b);
+  outer.addView(texts,new LinearLayout.LayoutParams(0,-2,1));
+  TextView arrow=new TextView(this);arrow.setText("›");arrow.setTextSize(28);arrow.setTextColor(teal);outer.addView(arrow);
+  LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,5,0,8);panel.addView(outer,lp);
+  outer.setOnClickListener(v->action.run());
+ }
+ void showSection(String type){
+  section=type;page(type.equals("calls")?"Call Activity":type.equals("team")?"Team Management":type.equals("reports")?"Reports & Insights":"Settings");
+  if(type.equals("calls")){
+    sectionTitle("Your calling workspace");
+    menuItem("☏","Assigned Numbers","View numbers and update contacted status",()->{Intent i=new Intent(this,WorklistActivity.class);i.putExtra("company",company);startActivity(i);});
+    menuItem("◷","Call History","Review calls saved on this device",()->localHistory());
+    menuItem("↻","Sync Now","Read permitted call history and sync",()->{store.scan(this,company,sim);store.upload();CallStore.schedule(this);toast("Sync requested");});
+    menuItem("✓","Call Access","Grant Android call-history permissions",()->{if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS},12);else {CallStore.schedule(this);toast("Permission already granted");}});
+  }else if(type.equals("team")){
+    sectionTitle("Team administration");
+    menuItem("▦","Company QR Code","Invite employees to this company",()->showQr());
+    menuItem("✓","Join Requests","Review and approve employee requests",()->requests());
+    if("owner".equals(role))menuItem("♙","Members & Roles","Manage team access and assignments",()->manageTeam());
+  }else if(type.equals("reports")){
+    sectionTitle("Performance");
+    menuItem("▥","Call Summary","Call counts and durations",()->report());
+    if("owner".equals(role)||"admin".equals(role))menuItem("☷","Team Calls","Review calls from authorized agents",()->teamLogs());
+  }else{
+    sectionTitle("Account & company");
+    menuItem("▤","Switch Company","Choose a different workspace",()->{company="";getSharedPreferences("settings",0).edit().remove("company").apply();section="";home();});
+    menuItem("⇥","Sign Out","Sign out of Google and Sharaco",()->{auth.signOut();company="";getSharedPreferences("settings",0).edit().remove("company").apply();GoogleSignIn.getClient(this,new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()).signOut();section="";home();});
+  }
+ }
  void toast(String msg){Toast.makeText(this,msg,Toast.LENGTH_LONG).show();}
  void page(String title){
   currentScreen=title;
@@ -95,7 +136,11 @@ public class MainActivity extends Activity {
  @Override public void onBackPressed(){
    if(auth.getCurrentUser()==null){super.onBackPressed();return;}
    if(currentScreen.equals("Sharaco Call Logger")){new android.app.AlertDialog.Builder(this).setTitle("Exit Sharaco?").setMessage("Your call sync remains scheduled if permissions allow.").setNegativeButton("Stay",null).setPositiveButton("Exit",(d,w)->finish()).show();return;}
-   home();
+   if(!section.isEmpty()){
+     String backTo=section;section="";
+     if(currentScreen.equals("Call Activity")||currentScreen.equals("Team Management")||currentScreen.equals("Reports & Insights")||currentScreen.equals("Settings"))home();
+     else showSection(backTo);
+   }else home();
  }
  void createCompany(){page("Create Company");EditText name=input("Company name");button("Save company",()->{
   String n=name.getText().toString().trim();if(n.isEmpty()){toast("Company name required");return;}
@@ -111,18 +156,18 @@ public class MainActivity extends Activity {
  }
  void choose(String cid,String ownSim){company=cid;sim=ownSim;getSharedPreferences("settings",0).edit().putString("company",company).putString("sim",sim).apply();home();}
  void companyHome(){
-  label("Your team dashboard");button("Change company",()->{company="";getSharedPreferences("settings",0).edit().remove("company").apply();home();});
+  label("Your workspace  •  Select a category");
   db.collection("companies").document(company).collection("members").document(uid()).get().addOnSuccessListener(doc->{
-   if(!Boolean.TRUE.equals(doc.getBoolean("approved"))){label("Awaiting owner approval (or membership not yet created)");return;}
+   if(!Boolean.TRUE.equals(doc.getBoolean("approved"))){label("Awaiting owner approval");return;}
    role=doc.getString("role");sim=doc.getString("sim")==null?"":doc.getString("sim");
    getSharedPreferences("settings",0).edit().putString("sim",sim).apply();
-   label("Role: "+role+" | Company SIM: "+sim);
-   button("◷  My call history",()->localHistory());
-   button("Enable call-log access",()->{if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS},12);else {CallStore.schedule(this);toast("Logging scheduled");}});
-   button("↻  Sync call history now",()->{store.scan(this,company,sim);store.upload();CallStore.schedule(this);toast("Sync started");});
-   button("▥  Call summary & reports",()->report());button("☏  Assigned numbers & follow-ups",()->{Intent i=new Intent(this,WorklistActivity.class);i.putExtra("company",company);startActivity(i);});
-   if(role.equals("owner")||role.equals("admin")){button("▦  Company joining QR",()->showQr());button("✓  Approve team members",()->requests());button("☷  Team call activity",()->teamLogs());if(role.equals("owner"))button("⚙  Manage team & permissions",()->manageTeam());}
-  }).addOnFailureListener(e->toast(e.getMessage()));
+   sectionTitle("Workspace");
+   menuItem("☏","Calls & Follow-ups","Call history, sync and assigned numbers",()->showSection("calls"));
+   menuItem("▥","Reports & Insights","Your call performance and activity",()->showSection("reports"));
+   if("owner".equals(role)||"admin".equals(role))menuItem("♙","Team Management","QR joining, approvals and permissions",()->showSection("team"));
+   menuItem("⚙","Settings & Account","Switch company and sign out",()->showSection("settings"));
+   label("Role: "+role+"   •   SIM: "+(sim.isEmpty()?"Not registered":sim));
+  }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
  }
  void showQr(){db.collection("companies").document(company).get().addOnSuccessListener(d->{
    String token=d.getString("joinToken");if(token==null){toast("QR not available");return;}
