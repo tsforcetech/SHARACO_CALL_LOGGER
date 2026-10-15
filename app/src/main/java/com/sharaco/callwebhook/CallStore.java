@@ -1,0 +1,69 @@
+package com.sharaco.callwebhook;
+
+import android.content.*;
+import android.database.Cursor;
+import android.database.sqlite.*;
+import android.provider.CallLog;
+import android.provider.ContactsContract;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import androidx.work.*;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+
+public class CallStore extends SQLiteOpenHelper {
+ public CallStore(Context c){super(c,"call_history.db",null,1);}
+ @Override public void onCreate(SQLiteDatabase d){d.execSQL("CREATE TABLE calls(id TEXT PRIMARY KEY,company TEXT,uid TEXT,sim TEXT,remote TEXT,contact TEXT,calltype TEXT,startms INTEGER,duration INTEGER,uploaded INTEGER DEFAULT 0)");}
+ @Override public void onUpgrade(SQLiteDatabase d,int o,int n){}
+ public synchronized void scan(Context c,String company,String sim){
+  if(c.checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)return;
+  if(company==null||company.isEmpty()||sim==null||sim.isEmpty())return;
+  String uid=FirebaseAuth.getInstance().getUid();if(uid==null)return;
+  String[] cols={CallLog.Calls._ID,CallLog.Calls.NUMBER,CallLog.Calls.TYPE,CallLog.Calls.DATE,CallLog.Calls.DURATION};
+  try(Cursor cursor=c.getContentResolver().query(CallLog.Calls.CONTENT_URI,cols,null,null,CallLog.Calls.DATE+" DESC")){
+   if(cursor==null)return;int count=0;
+   while(cursor.moveToNext()&&count++<2000){
+    long row=cursor.getLong(0),ms=cursor.getLong(3),duration=cursor.getLong(4);
+    String number=cursor.getString(1);int t=cursor.getInt(2);
+    String type=t==CallLog.Calls.INCOMING_TYPE?"INCOMING":t==CallLog.Calls.OUTGOING_TYPE?"OUTGOING":t==CallLog.Calls.MISSED_TYPE?"MISSED":t==CallLog.Calls.REJECTED_TYPE?"REJECTED":t==CallLog.Calls.BLOCKED_TYPE?"BLOCKED":"OTHER";
+    String contact=contact(c,number);
+    ContentValues v=new ContentValues();v.put("id",company+"_"+uid+"_"+row);v.put("company",company);v.put("uid",uid);v.put("sim",sim);v.put("remote",number);v.put("contact",contact);v.put("calltype",type);v.put("startms",ms);v.put("duration",duration);
+    getWritableDatabase().insertWithOnConflict("calls",null,v,SQLiteDatabase.CONFLICT_IGNORE);
+   }
+  }catch(Exception ignored){}
+ }
+ private String contact(Context c,String n){
+  if(n==null||c.checkSelfPermission(Manifest.permission.READ_CONTACTS)!=PackageManager.PERMISSION_GRANTED)return "";
+  try(Cursor cur=c.getContentResolver().query(android.net.Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI,android.net.Uri.encode(n)),new String[]{ContactsContract.PhoneLookup.DISPLAY_NAME},null,null,null)){
+    if(cur!=null&&cur.moveToFirst())return cur.getString(0);
+  }catch(Exception ignored){}return "";
+ }
+ public synchronized ArrayList<String> history(String company){
+  ArrayList<String> a=new ArrayList<>();
+  try(Cursor x=getReadableDatabase().rawQuery("SELECT remote,contact,calltype,duration,startms,uploaded FROM calls WHERE company=? ORDER BY startms DESC LIMIT 200",new String[]{company})){
+   while(x.moveToNext())a.add((x.getString(1).isEmpty()?x.getString(0):x.getString(1)+" ("+x.getString(0)+")")+" | "+x.getString(2)+" | "+x.getLong(3)+"s | "+new java.util.Date(x.getLong(4))+" | "+(x.getInt(5)==1?"SYNCED":"PENDING"));
+  }return a;
+ }
+ public synchronized void upload(){
+  String uid=FirebaseAuth.getInstance().getUid();if(uid==null)return;
+  try(Cursor x=getReadableDatabase().rawQuery("SELECT id,company,uid,sim,remote,contact,calltype,startms,duration FROM calls WHERE uploaded=0 AND uid=? ORDER BY startms ASC LIMIT 100",new String[]{uid})){
+   while(x.moveToNext()){
+    String id=x.getString(0),company=x.getString(1),owner=x.getString(2),sim=x.getString(3),remote=x.getString(4),contact=x.getString(5),type=x.getString(6);
+    long start=x.getLong(7),dur=x.getLong(8);
+    Map<String,Object> m=new HashMap<>();m.put("uid",owner);m.put("companyId",company);m.put("sim",sim);m.put("remoteNumber",remote==null?"":remote);m.put("fromNumber",type.equals("OUTGOING")?sim:remote);m.put("toNumber",type.equals("OUTGOING")?remote:sim);m.put("contactName",contact==null?"":contact);m.put("type",type);m.put("startedAt",start);m.put("durationSec",dur);m.put("createdAt",com.google.firebase.firestore.FieldValue.serverTimestamp());m.put("deviceCallId",id);
+    FirebaseFirestore.getInstance().collection("companies").document(company).collection("call_logs").document(id).set(m)
+    .addOnSuccessListener(v->{ContentValues done=new ContentValues();done.put("uploaded",1);getWritableDatabase().update("calls",done,"id=?",new String[]{id});});
+   }
+  }catch(Exception ignored){}
+ }
+ public static void schedule(Context c){
+  PeriodicWorkRequest task=new PeriodicWorkRequest.Builder(SyncWorker.class,15,TimeUnit.MINUTES).setConstraints(new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build();
+  WorkManager.getInstance(c).enqueueUniquePeriodicWork("call-sync",ExistingPeriodicWorkPolicy.KEEP,task);
+ }
+ public static class SyncWorker extends Worker {
+  public SyncWorker(Context c,WorkerParameters p){super(c,p);}
+  @Override public Result doWork(){String company=getApplicationContext().getSharedPreferences("settings",0).getString("company","");String sim=getApplicationContext().getSharedPreferences("settings",0).getString("sim","");CallStore s=new CallStore(getApplicationContext());s.scan(getApplicationContext(),company,sim);s.upload();return Result.success();}
+ }
+}
