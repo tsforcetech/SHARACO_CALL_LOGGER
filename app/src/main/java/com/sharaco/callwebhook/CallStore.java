@@ -59,7 +59,7 @@ public class CallStore extends SQLiteOpenHelper {
   }catch(Exception ignored){}
  }
  public static void schedule(Context c){
-  PeriodicWorkRequest task=new PeriodicWorkRequest.Builder(SyncWorker.class,15,TimeUnit.MINUTES).setConstraints(new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build();
+  PeriodicWorkRequest task=new PeriodicWorkRequest.Builder(SyncWorker.class,15,TimeUnit.MINUTES).build();
   WorkManager.getInstance(c).enqueueUniquePeriodicWork("call-sync",ExistingPeriodicWorkPolicy.KEEP,task);
  }
  public static class SyncWorker extends Worker {
