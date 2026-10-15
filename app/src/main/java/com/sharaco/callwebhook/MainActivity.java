@@ -25,13 +25,13 @@ public class MainActivity extends Activity {
  void toast(String msg){Toast.makeText(this,msg,Toast.LENGTH_LONG).show();}
  void page(String title){panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(24,24,24,24);ScrollView sv=new ScrollView(this);sv.addView(panel);setContentView(sv);label(title);}
  String uid(){return auth.getUid();}
- @Override public void onCreate(Bundle b){super.onCreate(b);auth=FirebaseAuth.getInstance();db=FirebaseFirestore.getInstance();store=new CallStore(this);company=getPreferences(0).getString("company","");sim=getPreferences(0).getString("sim","");home();}
+ @Override public void onCreate(Bundle b){super.onCreate(b);auth=FirebaseAuth.getInstance();db=FirebaseFirestore.getInstance();store=new CallStore(this);company=getSharedPreferences("settings",0).getString("company","");sim=getSharedPreferences("settings",0).getString("sim","");home();}
  void home(){page("SHARACO CALL LOGGER");
   if(uid()==null){login();return;}
   label(auth.getCurrentUser().getEmail());button("Sign out",()->{auth.signOut();company="";home();});
   button("Create company",()->createCompany());
   button("Join company (QR)",()->scanJoin());
-  String pending=getPreferences(0).getString("pendingCompany","");if(!pending.isEmpty())button("Check joined company approval",()->choose(pending,""));
+  String pending=getSharedPreferences("settings",0).getString("pendingCompany","");if(!pending.isEmpty())button("Check joined company approval",()->choose(pending,""));
   if(!company.isEmpty())companyHome();else showMyCompanies();
  }
  void login(){EditText email=input("Email"),pass=input("Password");pass.setInputType(129);
@@ -50,16 +50,16 @@ public class MainActivity extends Activity {
  void showMyCompanies(){label("Companies I own");db.collection("companies").whereEqualTo("ownerUid",uid()).get().addOnSuccessListener(s->{for(DocumentSnapshot d:s)button("Open "+d.getString("name"),()->choose(d.getId(),""));});
   label("My approved memberships"); // Memberships in other companies can be opened using the QR scan again.
  }
- void choose(String cid,String ownSim){company=cid;sim=ownSim;getPreferences(0).edit().putString("company",company).putString("sim",sim).apply();home();}
+ void choose(String cid,String ownSim){company=cid;sim=ownSim;getSharedPreferences("settings",0).edit().putString("company",company).putString("sim",sim).apply();home();}
  void companyHome(){
-  label("Company ID: "+company);button("Change company",()->{company="";getPreferences(0).edit().remove("company").apply();home();});
+  label("Company ID: "+company);button("Change company",()->{company="";getSharedPreferences("settings",0).edit().remove("company").apply();home();});
   db.collection("companies").document(company).collection("members").document(uid()).get().addOnSuccessListener(doc->{
    if(!Boolean.TRUE.equals(doc.getBoolean("approved"))){label("Awaiting owner approval (or membership not yet created)");return;}
    role=doc.getString("role");sim=doc.getString("sim")==null?"":doc.getString("sim");
-   getPreferences(0).edit().putString("sim",sim).apply();
+   getSharedPreferences("settings",0).edit().putString("sim",sim).apply();
    label("Role: "+role+" | Company SIM: "+sim);
    button("Local call history",()->localHistory());
-   button("Enable call-log access",()->{if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS},12);else toast("Already granted");});
+   button("Enable call-log access",()->{if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS},12);else {CallStore.schedule(this);toast("Logging scheduled");}});
    button("Sync call history now",()->{store.scan(this,company,sim);store.upload();CallStore.schedule(this);toast("Sync started");});
    button("My company report",()->report());
    if(role.equals("owner")||role.equals("admin")){button("Company QR code",()->showQr());button("Pending join requests",()->requests());button("Team call logs",()->teamLogs());}
@@ -80,7 +80,7 @@ public class MainActivity extends Activity {
   button("Submit request",()->{
    String n=name.getText().toString().trim(),p=phone.getText().toString().trim();if(n.isEmpty()||!p.matches("\\+[0-9]{8,15}")){toast("Enter name and international SIM number");return;}
    Map<String,Object> m=new HashMap<>();m.put("uid",uid());m.put("name",n);m.put("sim",p);m.put("token",token);m.put("status","pending");m.put("requestedAt",FieldValue.serverTimestamp());
-   db.collection("companies").document(cid).collection("join_requests").document(uid()).set(m).addOnSuccessListener(v->{getPreferences(0).edit().putString("pendingCompany",cid).apply();toast("Request submitted; owner approval required");}).addOnFailureListener(e->toast(e.getMessage()));
+   db.collection("companies").document(cid).collection("join_requests").document(uid()).set(m).addOnSuccessListener(v->{getSharedPreferences("settings",0).edit().putString("pendingCompany",cid).apply();toast("Request submitted; owner approval required");}).addOnFailureListener(e->toast(e.getMessage()));
   });button("Back",()->home());
  }
  void requests(){page("Pending join requests");db.collection("companies").document(company).collection("join_requests").whereEqualTo("status","pending").get().addOnSuccessListener(s->{
@@ -89,6 +89,7 @@ public class MainActivity extends Activity {
    WriteBatch b=db.batch();b.set(db.collection("companies").document(company).collection("members").document(d.getId()),m);
    b.update(d.getReference(),"status","approved");b.commit().addOnSuccessListener(v->requests()).addOnFailureListener(e->toast(e.getMessage()));
   });}}).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());}
+ @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==12 && checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED){CallStore.schedule(this);toast("Background sync scheduled");}else if(code==12)toast("Call-log access was not granted");}
  void localHistory(){page("Local SIM Call History");for(String row:store.history(company))label(row);button("Back",()->home());}
  void teamLogs(){page("Company Call Logs");db.collection("companies").document(company).collection("call_logs").orderBy("startedAt",Query.Direction.DESCENDING).limit(100).get().addOnSuccessListener(s->{for(DocumentSnapshot d:s)label(d.getString("remoteNumber")+" | "+d.getString("type")+" | "+d.getLong("durationSec")+" sec");}).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());}
  void report(){page("Call Summary");db.collection("companies").document(company).collection("call_logs").limit(1000).get().addOnSuccessListener(s->{
