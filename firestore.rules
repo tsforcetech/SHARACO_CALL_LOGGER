@@ -7,7 +7,7 @@ service cloud.firestore {
   function active(cid) { return signed() && exists(/databases/$(database)/documents/companies/$(cid)/members/$(request.auth.uid)) && member(cid, request.auth.uid).data.approved == true; }
   function owner(cid) { return signed() && company(cid).data.ownerUid == request.auth.uid; }
   function admin(cid) { return active(cid) && (member(cid,request.auth.uid).data.role in ['owner','admin']); }
-  function canReadCall(cid) { return admin(cid) || (active(cid) && (resource.data.uid == request.auth.uid || (member(cid,request.auth.uid).data.get('assignedUsers',[]).hasAny([resource.data.uid])))); }
+  function canReadCall(cid) { return owner(cid) || (active(cid) && (resource.data.uid == request.auth.uid || member(cid,request.auth.uid).data.get('assignedUsers',[]).hasAny([resource.data.uid]))); }
   match /companies/{cid} {
    allow create: if signed() && request.resource.data.keys().hasOnly(['name','ownerUid','createdAt','joinToken']) && request.resource.data.ownerUid == request.auth.uid && request.resource.data.name is string && request.resource.data.joinToken is string && request.resource.data.joinToken.size() >= 30;
    allow get, list: if owner(cid) || active(cid);
