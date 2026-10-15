@@ -43,7 +43,8 @@ public class CrmActivity extends Activity {
   button("All statuses",()->list(null));
   button("Pending",()->list("pending"));
   button("Interested",()->list("interested"));
-  button("Follow-up due",()->list("follow_up"));
+  button("Follow-up due today",()->dueList());
+  button("All follow-ups",()->list("follow_up"));
   button("Won",()->list("won"));
   button("Lost",()->list("lost"));
   button("Return to company",()->finish());
@@ -63,6 +64,22 @@ public class CrmActivity extends Activity {
    if(shown==0)label("No leads in this category");
   }).addOnFailureListener(e->toast("Unable to load leads: "+e.getLocalizedMessage()));
   button("Back to follow-ups",()->home());
+ }
+ void dueList(){
+  page("Due Follow-ups");
+  Query q=leads();if(!manager())q=q.whereEqualTo("assignedTo",uid);
+  q.limit(300).get().addOnSuccessListener(s->{
+   String now=new SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US).format(new Date());
+   int count=0;
+   for(DocumentSnapshot d:s){
+    String when=d.getString("nextFollowUp"),status=d.getString("status");
+    if(when==null||when.isEmpty()||when.compareTo(now)>0||"won".equals(status)||"lost".equals(status))continue;
+    count++;label((d.getString("name")==null?"Contact":d.getString("name"))+" · "+d.getString("phone")+"\nDue: "+when);
+    button("Open follow-up",()->details(d.getId()));
+   }
+   if(count==0)label("No currently due follow-ups in the first 300 assigned leads.");
+  }).addOnFailureListener(e->toast("Unable to load due follow-ups: "+e.getLocalizedMessage()));
+  button("Back",()->home());
  }
  void details(String id){
   leads().document(id).get().addOnSuccessListener(d->{
