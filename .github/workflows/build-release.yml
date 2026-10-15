@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v2.5.0 employee reports and consent-safe upload queue
+# Release v2.6.0 account isolation and device enrollment
 on:
   workflow_dispatch:
   push:
