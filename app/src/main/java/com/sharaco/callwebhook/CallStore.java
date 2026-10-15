@@ -10,6 +10,7 @@ import android.content.pm.PackageManager;
 import androidx.work.*;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.DocumentSnapshot;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import com.google.android.gms.tasks.Tasks;
@@ -66,10 +67,10 @@ public class CallStore extends SQLiteOpenHelper {
   int result=0;try(Cursor x=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM calls WHERE company=? AND uploaded=1",new String[]{cid})){if(x.moveToFirst())result=x.getInt(0);}return result;
  }
  public static long lastSync(Context c){return c.getSharedPreferences("settings",0).getLong("lastSync",0);}
- public synchronized boolean uploadBlocking(){
+ public synchronized boolean uploadBlocking(String companyId){
   String current=FirebaseAuth.getInstance().getUid();if(current==null)return false;
   boolean success=true;
-  try(Cursor x=getReadableDatabase().rawQuery("SELECT id,company,uid,sim,remote,contact,calltype,startms,duration FROM calls WHERE uploaded=0 AND uid=? ORDER BY startms ASC LIMIT 250",new String[]{current})){
+  try(Cursor x=getReadableDatabase().rawQuery("SELECT id,company,uid,sim,remote,contact,calltype,startms,duration FROM calls WHERE uploaded=0 AND uid=? AND company=? ORDER BY startms ASC LIMIT 250",new String[]{current,companyId})){
    while(x.moveToNext()){
     String id=x.getString(0),cid=x.getString(1),owner=x.getString(2),sim=x.getString(3),remote=x.getString(4),contact=x.getString(5),type=x.getString(6);
     long start=x.getLong(7),dur=x.getLong(8);
@@ -108,8 +109,18 @@ public class CallStore extends SQLiteOpenHelper {
    String cid=c.getSharedPreferences("settings",0).getString("syncCompany","");
    String sim=c.getSharedPreferences("settings",0).getString("syncSim","");
    if(FirebaseAuth.getInstance().getUid()==null || cid.isEmpty() || sim.isEmpty())return Result.success();
+   if(!c.getSharedPreferences("settings",0).getBoolean("syncConsent",false))return Result.success();
+   try{
+    DocumentSnapshot member=Tasks.await(FirebaseFirestore.getInstance().collection("companies").document(cid).collection("members").document(FirebaseAuth.getInstance().getUid()).get(),30,TimeUnit.SECONDS);
+    if(!Boolean.TRUE.equals(member.getBoolean("approved")) || !sim.equals(member.getString("sim")))return Result.success();
+    String deviceId=c.getSharedPreferences("device_install",0).getString("deviceId","");
+    if(!deviceId.isEmpty()){
+      DocumentSnapshot device=Tasks.await(FirebaseFirestore.getInstance().collection("companies").document(cid).collection("devices").document(FirebaseAuth.getInstance().getUid()+"_"+deviceId).get(),30,TimeUnit.SECONDS);
+      if(device.exists() && !"active".equals(device.getString("status")))return Result.success();
+    }
+   }catch(Exception e){return Result.retry();}
    CallStore s=new CallStore(c);s.scan(c,cid,sim);
-   boolean ok=s.uploadBlocking();if(ok)c.getSharedPreferences("settings",0).edit().putLong("lastSync",System.currentTimeMillis()).apply();return ok?Result.success():Result.retry();
+   boolean ok=s.uploadBlocking(cid);if(ok)c.getSharedPreferences("settings",0).edit().putLong("lastSync",System.currentTimeMillis()).apply();return ok?Result.success():Result.retry();
   }
  }
 }
