@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v2.2.0 reporting export reliability
+# Release v2.3.0 company-bound consent and capture boundary
 on:
   workflow_dispatch:
   push:
