@@ -158,17 +158,20 @@ public class MainActivity extends Activity {
   DocumentReference d=db.collection("companies").document();
   Map<String,Object> member=new HashMap<>();member.put("uid",uid());member.put("role","owner");member.put("approved",true);member.put("sim","");member.put("assignedUsers",new ArrayList<String>());
   WriteBatch b=db.batch();b.set(d,c);b.set(d.collection("members").document(uid()),member);
-  b.commit().addOnSuccessListener(v->{choose(d.getId(),"");}).addOnFailureListener(e->toast(e.getMessage()));
+  b.set(db.collection("users").document(uid()).collection("companies").document(d.getId()),new HashMap<String,Object>(){{put("name",n);put("role","owner");put("status","approved");put("updatedAt",FieldValue.serverTimestamp());}});b.commit().addOnSuccessListener(v->{choose(d.getId(),"");}).addOnFailureListener(e->toast(e.getMessage()));
  });button("Back",()->home());}
  void showMyCompanies(){
-  db.collection("companies").whereEqualTo("ownerUid",uid()).get()
-    .addOnSuccessListener(s->{
-      if(s.isEmpty())label("You have not created a company yet.");
-      for(DocumentSnapshot d:s)menuItem("▣",d.getString("name")==null?"Company":d.getString("name"),"Owner  ·  Open company workspace",()->choose(d.getId(),""));
-    }).addOnFailureListener(e->toast("Unable to load companies: "+e.getLocalizedMessage()));
-  // Joined companies are remembered for quick access; access is rechecked in Firestore.
-  String joined=getSharedPreferences("settings",0).getString("pendingCompany","");
-  if(!joined.isEmpty())menuItem("♙","Joined Company","Open your membership or check approval",()->choose(joined,""));
+  db.collection("companies").whereEqualTo("ownerUid",uid()).get().addOnSuccessListener(s->{
+   if(s.isEmpty())label("No companies owned by this account.");
+   for(DocumentSnapshot d:s)menuItem("▣",d.getString("name")==null?"Company":d.getString("name"),"Owner  ·  Open company workspace",()->choose(d.getId(),""));
+  }).addOnFailureListener(e->toast("Unable to load companies: "+e.getLocalizedMessage()));
+  db.collection("users").document(uid()).collection("companies").get().addOnSuccessListener(s->{
+   for(DocumentSnapshot d:s){
+    String cid=d.getId();if("owner".equals(d.getString("role")))continue;
+    String companyName=d.getString("name");String status=d.getString("status");
+    menuItem("♙",companyName==null?cid:companyName,(status==null?"Membership":status)+"  ·  Open workspace",()->choose(cid,""));
+   }
+  }).addOnFailureListener(e->label("Joined-company directory unavailable until the latest Firebase rules are published."));
  }
  void choose(String cid,String ownSim){
   company=cid;section="";getSharedPreferences("settings",0).edit().putString("company",cid).apply();
@@ -260,7 +263,7 @@ public class MainActivity extends Activity {
   for(DocumentSnapshot d:s){label(d.getString("name")+" | "+d.getString("sim"));button("Approve "+d.getString("name"),()->{
    Map<String,Object> m=new HashMap<>();m.put("uid",d.getId());m.put("role","employee");m.put("approved",true);m.put("sim",d.getString("sim"));m.put("assignedUsers",new ArrayList<String>());
    WriteBatch b=db.batch();b.set(db.collection("companies").document(company).collection("members").document(d.getId()),m);
-   b.update(d.getReference(),"status","approved");b.commit().addOnSuccessListener(v->requests()).addOnFailureListener(e->toast(e.getMessage()));
+   b.update(d.getReference(),"status","approved");Map<String,Object> directory=new HashMap<>();directory.put("name",company);directory.put("role","employee");directory.put("status","approved");directory.put("updatedAt",FieldValue.serverTimestamp());b.set(db.collection("users").document(d.getId()).collection("companies").document(company),directory);b.commit().addOnSuccessListener(v->requests()).addOnFailureListener(e->toast(e.getMessage()));
   });}}).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());}
  @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==12 && checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED){CallStore.schedule(this);toast("Automatic background sync scheduled");}else if(code==12)toast("Call-log access was not granted");}
  void manageTeam(){if(!isAdmin()){toast("Access denied");return;}page("Manage Company Team");
