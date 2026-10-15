@@ -5,7 +5,7 @@ service cloud.firestore {
   function company(cid) { return get(/databases/$(database)/documents/companies/$(cid)); }
   function member(cid, uid) { return get(/databases/$(database)/documents/companies/$(cid)/members/$(uid)); }
   function active(cid) { return signed() && exists(/databases/$(database)/documents/companies/$(cid)/members/$(request.auth.uid)) && member(cid, request.auth.uid).data.approved == true; }
-  function owner(cid) { return signed() && company(cid).data.ownerUid == request.auth.uid; }
+  function owner(cid) { return signed() && exists(/databases/$(database)/documents/companies/$(cid)) && company(cid).data.ownerUid == request.auth.uid; }
   function admin(cid) { return active(cid) && (member(cid,request.auth.uid).data.role in ['owner','admin']); }
   function canReadCall(cid) { return owner(cid) || (active(cid) && (resource.data.uid == request.auth.uid || member(cid,request.auth.uid).data.get('assignedUsers',[]).hasAny([resource.data.uid]))); }
   match /companies/{cid} {
@@ -16,7 +16,7 @@ service cloud.firestore {
    match /members/{uid} {
     allow get: if owner(cid) || (signed() && request.auth.uid == uid);
     allow list: if admin(cid);
-    allow create: if (owner(cid) || (signed() && uid == request.auth.uid && getAfter(/databases/$(database)/documents/companies/$(cid)).data.ownerUid == uid && request.resource.data.role == 'owner')) && request.resource.data.uid == uid && request.resource.data.approved == true && request.resource.data.role in ['employee','supervisor','admin','owner'];
+    allow create: if signed() && request.resource.data.uid == uid && request.resource.data.approved == true && ((uid == request.auth.uid && request.resource.data.role == 'owner' && getAfter(/databases/$(database)/documents/companies/$(cid)).data.ownerUid == uid) || (owner(cid) && request.resource.data.role in ['employee','supervisor','admin']));
     allow update: if owner(cid) && request.resource.data.uid == resource.data.uid;
     allow delete: if owner(cid) && uid != request.auth.uid;
    }
