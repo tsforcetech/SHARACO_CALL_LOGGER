@@ -44,13 +44,16 @@ service cloud.firestore {
       && exists(/databases/$(database)/documents/companies/$(cid)/members/$(request.resource.data.assignedTo))
       && get(/databases/$(database)/documents/companies/$(cid)/members/$(request.resource.data.assignedTo)).data.approved == true;
     allow update: if active(cid)
-      && resource.data.assignedTo == request.auth.uid
-      && resource.data.status == 'pending'
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','contactedBy','contactedAt','outcome','updatedAt'])
-      && request.resource.data.status == 'contacted'
-      && request.resource.data.contactedBy == request.auth.uid
-      && request.resource.data.outcome is string
-      && request.resource.data.outcome.size() <= 1000;
+      && (admin(cid) || resource.data.assignedTo == request.auth.uid)
+      && request.resource.data.assignedTo == resource.data.assignedTo
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','contactedBy','contactedAt','outcome','nextFollowUp','lastUpdatedBy','updatedAt'])
+      && request.resource.data.status in ['pending','contacted','interested','follow_up','won','lost']
+      && request.resource.data.get('outcome','') is string
+      && request.resource.data.get('outcome','').size() <= 1000
+      && request.resource.data.get('nextFollowUp','') is string
+      && request.resource.data.get('nextFollowUp','').size() <= 30
+      && request.resource.data.get('lastUpdatedBy',request.auth.uid) == request.auth.uid
+      && request.resource.data.get('contactedBy',request.auth.uid) == request.auth.uid;
     allow delete: if false;
    }
    match /call_logs/{callId} {
