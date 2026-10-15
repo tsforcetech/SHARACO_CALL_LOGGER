@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isOwner(companyId) {
+      return signedIn() && exists(/databases/$(database)/documents/companies/$(companyId))
+        && get(/databases/$(database)/documents/companies/$(companyId)).data.ownerUid == request.auth.uid;
+    }
+    match /companies/{companyId} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['name','ownerUid','createdAt'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.name is string;
+      allow read, update, delete: if isOwner(companyId);
+      match /members/{memberUid} {
+        allow read: if isOwner(companyId) || (signedIn() && request.auth.uid == memberUid);
+        allow create: if isOwner(companyId) && request.resource.data.uid == memberUid;
+        allow update, delete: if isOwner(companyId);
+      }
+      match /call_logs/{callId} {
+        allow read: if isOwner(companyId);
+        allow write: if false;
+      }
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
