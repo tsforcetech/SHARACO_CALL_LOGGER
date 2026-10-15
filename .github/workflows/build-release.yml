@@ -33,6 +33,7 @@ jobs:
           test -n "$KEYSTORE_B64" || { echo "Missing ANDROID_KEYSTORE_BASE64"; exit 1; }
           test -n "$STORE_PASS" && test -n "$KEY_ALIAS" && test -n "$KEY_PASS" || { echo "Missing signing credentials"; exit 1; }
           printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' | base64 --decode > "$RUNNER_TEMP/sharaco-release.jks"
+          test -s "$RUNNER_TEMP/sharaco-release.jks" || { echo "Decoded keystore is empty"; exit 1; }
           echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/sharaco-release.jks" >> "$GITHUB_ENV"
           echo "SIGNING_STORE_PASSWORD=$STORE_PASS" >> "$GITHUB_ENV"
           echo "SIGNING_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
