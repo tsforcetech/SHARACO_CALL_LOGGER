@@ -9,6 +9,16 @@ import android.graphics.Bitmap;
 import android.widget.*;
 import android.view.*;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.GoogleAuthProvider;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.api.ApiException;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.view.Gravity;
 import com.google.firebase.firestore.*;
 import com.google.zxing.*;
 import com.google.zxing.common.BitMatrix;
@@ -19,11 +29,23 @@ import java.util.*;
 public class MainActivity extends Activity {
  LinearLayout panel; FirebaseAuth auth;FirebaseFirestore db;CallStore store;
  String company="",sim="",role="";
- void label(String s){TextView v=new TextView(this);v.setText(s);v.setTextSize(17);v.setPadding(0,12,0,8);panel.addView(v);}
+ String currentScreen="";
+ static final int GOOGLE_REQUEST=712;
+ boolean signingIn=false;
+ int teal=Color.rgb(0,171,143);
+ GradientDrawable rounded(int color,int r){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(r);return d;}
+ void label(String s){TextView v=new TextView(this);v.setText(s);v.setTextColor(Color.rgb(32,48,53));v.setTextSize(16);v.setPadding(4,14,4,10);panel.addView(v);}
  EditText input(String hint){EditText v=new EditText(this);v.setHint(hint);panel.addView(v);return v;}
- void button(String s,Runnable job){Button b=new Button(this);b.setText(s);panel.addView(b);b.setOnClickListener(v->job.run());}
+ void button(String s,Runnable job){Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(15);b.setTextColor(Color.WHITE);b.setBackground(rounded(teal,26));LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);bp.setMargins(0,5,0,9);panel.addView(b,bp);b.setOnClickListener(v->job.run());}
  void toast(String msg){Toast.makeText(this,msg,Toast.LENGTH_LONG).show();}
- void page(String title){panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(24,24,24,24);ScrollView sv=new ScrollView(this);sv.addView(panel);setContentView(sv);label(title);}
+ void page(String title){
+  currentScreen=title;
+  panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(24,24,24,32);
+  panel.setBackgroundColor(Color.rgb(247,250,250));
+  ScrollView sv=new ScrollView(this);sv.setFillViewport(true);sv.addView(panel);setContentView(sv);
+  if(!title.equals("Sharaco Call Logger")){button("‹  Back",()->onBackPressed());}
+  TextView heading=new TextView(this);heading.setText(title);heading.setTextSize(23);heading.setTextColor(Color.rgb(16,48,48));heading.setTypeface(null,Typeface.BOLD);heading.setPadding(2,18,2,18);panel.addView(heading);
+ }
  String uid(){return auth.getUid();}
  @Override public void onCreate(Bundle b){super.onCreate(b);auth=FirebaseAuth.getInstance();db=FirebaseFirestore.getInstance();store=new CallStore(this);company=getSharedPreferences("settings",0).getString("company","");sim=getSharedPreferences("settings",0).getString("sim","");home();}
  void home(){page("Sharaco Call Logger"); ImageView brand=new ImageView(this);brand.setImageResource(com.sharaco.callwebhook.R.drawable.sharaco_mark);brand.setAdjustViewBounds(true);brand.setMaxHeight(190);panel.addView(brand);
@@ -35,34 +57,34 @@ public class MainActivity extends Activity {
   if(!company.isEmpty())companyHome();else showMyCompanies();
  }
  void login(){
-  EditText email=input("Email address"),pass=input("Password (minimum 6 characters)");
-  email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
-  pass.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-  button("Login",()->authenticate(email,pass,false));
-  button("Register",()->authenticate(email,pass,true));
+   label("Welcome to Sharaco Call Logger");
+   label("One secure Google account for your companies, call activity, and team assignments.");
+   button("Continue with Google",()->startGoogleLogin());
  }
- void authenticate(EditText email,EditText password,boolean register){
-  String e=email.getText().toString().trim();
-  String p=password.getText().toString();
-  if(e.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(e).matches()){
-    email.setError("Enter a valid email address");email.requestFocus();return;
-  }
-  if(p.length()<6){
-    password.setError("Password must contain at least 6 characters");password.requestFocus();return;
-  }
-  try {
-    com.google.android.gms.tasks.Task<com.google.firebase.auth.AuthResult> task=
-      register?auth.createUserWithEmailAndPassword(e,p):auth.signInWithEmailAndPassword(e,p);
-    task.addOnSuccessListener(result->{toast(register?"Account created":"Signed in");home();})
-        .addOnFailureListener(err->{
-          android.util.Log.e("SharacoAuth",register?"Registration failed":"Login failed",err);
-          String reason=err.getLocalizedMessage();
-          toast((register?"Registration failed: ":"Login failed: ")+(reason==null?"Please check Firebase Authentication settings":reason));
-        });
-  }catch(Exception err){
-    android.util.Log.e("SharacoAuth","Authentication request failed before network call",err);
-    toast("Unable to start authentication: "+err.getClass().getSimpleName());
-  }
+ void startGoogleLogin(){
+   if(signingIn)return;
+   int id=getResources().getIdentifier("default_web_client_id","string",getPackageName());
+   if(id==0){toast("Google sign-in configuration missing. Add SHA-1 fingerprint in Firebase and download updated google-services.json.");return;}
+   String clientId=getString(id);
+   GoogleSignInOptions options=new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).requestEmail().requestIdToken(clientId).build();
+   GoogleSignInClient client=GoogleSignIn.getClient(this,options);
+   signingIn=true;
+   client.signOut().addOnCompleteListener(task->{try{startActivityForResult(client.getSignInIntent(),GOOGLE_REQUEST);}catch(Exception e){signingIn=false;toast("Google Sign-In unavailable: "+e.getMessage());}});
+ }
+ void finishGoogleLogin(Intent data){
+   signingIn=false;
+   try{
+     GoogleSignInAccount a=GoogleSignIn.getSignedInAccountFromIntent(data).getResult(ApiException.class);
+     if(a==null||a.getIdToken()==null){toast("Google did not return an ID token");return;}
+     auth.signInWithCredential(GoogleAuthProvider.getCredential(a.getIdToken(),null))
+       .addOnSuccessListener(r->home())
+       .addOnFailureListener(e->toast("Firebase Google sign-in failed: "+e.getLocalizedMessage()));
+   }catch(ApiException e){toast("Google sign-in error "+e.getStatusCode()+". Check Firebase SHA-1 and Google provider.");}
+ }
+ @Override public void onBackPressed(){
+   if(auth.getCurrentUser()==null){super.onBackPressed();return;}
+   if(currentScreen.equals("Sharaco Call Logger")){new android.app.AlertDialog.Builder(this).setTitle("Exit Sharaco?").setMessage("Your call sync remains scheduled if permissions allow.").setNegativeButton("Stay",null).setPositiveButton("Exit",(d,w)->finish()).show();return;}
+   home();
  }
  void createCompany(){page("Create Company");EditText name=input("Company name");button("Save company",()->{
   String n=name.getText().toString().trim();if(n.isEmpty()){toast("Company name required");return;}
@@ -101,7 +123,7 @@ public class MainActivity extends Activity {
   }).addOnFailureListener(e->toast(e.getMessage()));}
  void scanJoin(){new IntentIntegrator(this).setPrompt("Scan company QR").setBeepEnabled(false).initiateScan();}
  @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);IntentResult scan=IntentIntegrator.parseActivityResult(request,result,data);
-  if(scan!=null&&scan.getContents()!=null){String[] parts=scan.getContents().split(":");if(parts.length==3&&parts[0].equals("SHARACO"))join(parts[1],parts[2]);else toast("Invalid company code");}}
+  if(request==GOOGLE_REQUEST){finishGoogleLogin(data);return;}if(scan!=null&&scan.getContents()!=null){String[] parts=scan.getContents().split(":");if(parts.length==3&&parts[0].equals("SHARACO"))join(parts[1],parts[2]);else toast("Invalid company code");}}
  void join(String cid,String token){page("Request to Join Company");EditText name=input("Your name");EditText phone=input("Your company SIM number (+countrycode...)");
   button("Submit request",()->{
    String n=name.getText().toString().trim(),p=phone.getText().toString().trim();if(n.isEmpty()||!p.matches("\\+[0-9]{8,15}")){toast("Enter name and international SIM number");return;}
