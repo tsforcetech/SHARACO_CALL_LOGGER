@@ -6,6 +6,9 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.widget.*;
 import android.view.*;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.*;
 import java.io.*;
@@ -25,10 +28,20 @@ public class WorklistActivity extends Activity {
  db.collection("companies").document(company).collection("members").document(uid).get().addOnSuccessListener(d->{
  if(!Boolean.TRUE.equals(d.getBoolean("approved"))){finish();return;}role=d.getString("role");showHome();
  }).addOnFailureListener(e->finish());}
- void page(String title){worklistHome=title.equals("Assigned Number Worklist");layout=new LinearLayout(this);layout.setOrientation(1);layout.setPadding(24,24,24,24);ScrollView sc=new ScrollView(this);sc.addView(layout);setContentView(sc);label(title);if(!worklistHome)btn("‹  Back",()->showHome());}
+ void page(String title){
+  worklistHome=title.equals("Assigned Number Worklist");
+  layout=new LinearLayout(this);layout.setOrientation(1);layout.setPadding(24,24,24,32);layout.setBackgroundColor(Color.rgb(247,250,250));
+  ScrollView sc=new ScrollView(this);sc.setFillViewport(true);sc.addView(layout);setContentView(sc);
+  if(!worklistHome)btn("‹  Back",()->onBackPressed());
+  TextView heading=new TextView(this);heading.setText(title);heading.setTextSize(23);heading.setTextColor(Color.rgb(16,48,48));heading.setTypeface(null,Typeface.BOLD);heading.setPadding(4,16,4,18);layout.addView(heading);
+}
  void label(String v){TextView t=new TextView(this);t.setText(v);t.setTextSize(17);t.setPadding(0,12,0,8);layout.addView(t);}
  EditText edit(String v){EditText t=new EditText(this);t.setHint(v);layout.addView(t);return t;}
- void btn(String v,Runnable action){Button b=new Button(this);b.setText(v);layout.addView(b);b.setOnClickListener(x->action.run());}
+ void btn(String v,Runnable action){
+ Button b=new Button(this);b.setText(v);b.setAllCaps(false);b.setTextSize(15);b.setTextColor(v.startsWith("‹")?Color.rgb(21,83,77):Color.WHITE);
+ GradientDrawable bg=new GradientDrawable();bg.setColor(v.startsWith("‹")?Color.rgb(231,246,242):Color.rgb(0,171,143));bg.setCornerRadius(28);b.setBackground(bg);
+ LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,6,0,8);layout.addView(b,lp);b.setOnClickListener(x->action.run());
+}
  void msg(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
  CollectionReference numbers(){return db.collection("companies").document(company).collection("assigned_numbers");}
  boolean manager(){return "owner".equals(role)||"admin".equals(role);}
