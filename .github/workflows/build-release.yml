@@ -1,6 +1,10 @@
 name: Build signed production APK
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-release.yml'
 permissions:
   contents: read
 jobs:
