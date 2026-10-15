@@ -70,6 +70,8 @@ public class MainActivity extends Activity {
     menuItem("♙","My SIM Number","Register your own company calling number",()->ownSim());
     menuItem("☏","Assigned Numbers","View numbers and update contacted status",()->{Intent i=new Intent(this,WorklistActivity.class);i.putExtra("company",company);startActivity(i);});
     menuItem("◷","Call History","Review calls saved on this device",()->localHistory());
+    menuItem("☷","Sync Health","Pending records, upload status and last sync",()->syncHealth());
+    menuItem("◉","Lead Follow-ups","Update lead status and next actions",()->openCrm());
     menuItem("↻","Sync Now","Queue call history upload to Firebase",()->{CallStore.schedule(this);toast("Background sync queued");});
     menuItem("✓","Call Access","Grant Android call-history permissions",()->{if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS},12);else {CallStore.schedule(this);toast("Permission already granted");}});
   }else if(type.equals("team")){
@@ -185,9 +187,41 @@ public class MainActivity extends Activity {
    sectionTitle("Workspace");
    menuItem("☏","Calls & Follow-ups","Call history, sync and assigned numbers",()->showSection("calls"));
    if(isAdmin())menuItem("▥","Reports & Insights","Company-wide call performance and activity",()->showSection("reports"));
+   if(isAdmin())menuItem("▣","Company Overview","Employees, assigned numbers and sync activity",()->companyOverview());
    if("owner".equals(role)||"admin".equals(role))menuItem("♙","Team Management","QR joining, approvals and permissions",()->showSection("team"));
    if(isAdmin())menuItem("⚙","Company Configuration","Company administration and configuration",()->showSection("settings"));
    label("Role: "+role+"   •   SIM: "+(sim.isEmpty()?"Not registered":sim));
+  }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
+ }
+ void openCrm(){
+  Intent i=new Intent(this,CrmActivity.class);i.putExtra("company",company);startActivity(i);
+ }
+ void syncHealth(){
+  page("Call Sync Health");sectionTitle("Current company");
+  label("Pending upload: "+store.countPending(company));
+  label("Successfully uploaded: "+store.countSynced(company));
+  long last=CallStore.lastSync(this);
+  label("Last background sync: "+(last==0?"Not yet completed":new java.util.Date(last).toString()));
+  boolean permission=checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED;
+  label("Android call-log permission: "+(permission?"Granted":"Not granted"));
+  label("My SIM: "+(sim.isEmpty()?"Not registered":sim));
+  label("Android schedules periodic work approximately every 15 minutes. Battery optimization, connectivity, sign-in and device policies can delay sync.");
+  button("Queue upload now",()->{CallStore.schedule(this);toast("Sync queued");});
+ }
+ void companyOverview(){
+  if(!isAdmin()){toast("Admin access required");return;}
+  page("Company Overview");sectionTitle("Company activity");
+  db.collection("companies").document(company).collection("members").get().addOnSuccessListener(s->label("Team members: "+s.size())).addOnFailureListener(e->toast(e.getLocalizedMessage()));
+  db.collection("companies").document(company).collection("assigned_numbers").get().addOnSuccessListener(s->{
+    int contacted=0;for(DocumentSnapshot d:s)if("contacted".equals(d.getString("status")))contacted++;
+    label("Assigned leads: "+s.size()+"  ·  Contacted: "+contacted);
+  }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
+  db.collection("companies").document(company).collection("call_logs").limit(1000).get().addOnSuccessListener(s->{
+    int incoming=0,outgoing=0,missed=0;long seconds=0;
+    for(DocumentSnapshot d:s){String type=d.getString("type");if("INCOMING".equals(type))incoming++;if("OUTGOING".equals(type))outgoing++;if("MISSED".equals(type))missed++;Long dur=d.getLong("durationSec");if(dur!=null)seconds+=dur;}
+    label("Recent calls (up to 1,000): "+s.size());
+    label("Incoming: "+incoming+"  ·  Outgoing: "+outgoing+"  ·  Missed: "+missed);
+    label("Total call time: "+(seconds/60)+" minutes");
   }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
  }
  void ownSim(){
