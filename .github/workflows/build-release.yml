@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v2.6.0 account isolation and device enrollment
+# Release v2.7.0 follow-up notification and consistent visual styles
 on:
   workflow_dispatch:
   push:
