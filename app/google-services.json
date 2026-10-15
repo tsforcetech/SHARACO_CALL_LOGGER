@@ -12,7 +12,20 @@
           "package_name": "com.sharaco.callwebhook"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "205964404683-6akfrd9dfthqvja3qtqbbbobe5fak1ik.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sharaco.callwebhook",
+            "certificate_hash": "63cb17c5994a65fe7804f93b983ed9095279f2c2"
+          }
+        },
+        {
+          "client_id": "205964404683-mjmc44id9p6ffrvem8ukh2vj6p9eodpb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyD44HQvkVq5eknQG2yeS1ggdsbpopDHCYU"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "205964404683-mjmc44id9p6ffrvem8ukh2vj6p9eodpb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
