@@ -6,6 +6,9 @@ import android.database.sqlite.*;
 import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.Manifest;
+import android.os.Build;
+import android.telephony.SubscriptionManager;
+import android.telephony.SubscriptionInfo;
 import android.content.pm.PackageManager;
 import androidx.work.*;
 import com.google.firebase.auth.FirebaseAuth;
@@ -23,6 +26,7 @@ public class CallStore extends SQLiteOpenHelper {
   if(c.checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)return;
   if(company==null||company.isEmpty()||sim==null||sim.isEmpty())return;
   String uid=FirebaseAuth.getInstance().getUid();if(uid==null)return;
+  if(!safeSingleSim(c))return;
   long consentStart=c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L);
   if(consentStart<=0L)return;
   String[] cols={CallLog.Calls._ID,CallLog.Calls.NUMBER,CallLog.Calls.TYPE,CallLog.Calls.DATE,CallLog.Calls.DURATION};
@@ -38,6 +42,18 @@ public class CallStore extends SQLiteOpenHelper {
     getWritableDatabase().insertWithOnConflict("calls",null,v,SQLiteDatabase.CONFLICT_IGNORE);
    }
   }catch(Exception ignored){}
+ }
+ public static boolean safeSingleSim(Context c){
+  if(c.getPackageManager().hasSystemFeature(PackageManager.FEATURE_TELEPHONY_SUBSCRIPTION)){
+   if(c.checkSelfPermission(Manifest.permission.READ_PHONE_STATE)!=PackageManager.PERMISSION_GRANTED)return false;
+   try{
+    SubscriptionManager manager=(SubscriptionManager)c.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+    if(manager==null)return false;
+    java.util.List<SubscriptionInfo> active=manager.getActiveSubscriptionInfoList();
+    return active!=null && active.size()==1;
+   }catch(SecurityException e){return false;}
+  }
+  return false;
  }
  private String contact(Context c,String n){
   if(n==null||c.checkSelfPermission(Manifest.permission.READ_CONTACTS)!=PackageManager.PERMISSION_GRANTED)return "";
@@ -76,6 +92,8 @@ public class CallStore extends SQLiteOpenHelper {
   try(Cursor x=getReadableDatabase().rawQuery("SELECT id,company,uid,sim,remote,contact,calltype,startms,duration FROM calls WHERE uploaded=0 AND uid=? AND company=? ORDER BY startms ASC LIMIT 250",new String[]{current,companyId})){
    while(x.moveToNext()){
     String id=x.getString(0),cid=x.getString(1),owner=x.getString(2),sim=x.getString(3),remote=x.getString(4),contact=x.getString(5),type=x.getString(6);
+    if(!cid.equals(companyId))continue;
+
     long start=x.getLong(7),dur=x.getLong(8);
     Map<String,Object> m=new HashMap<>();m.put("uid",owner);m.put("companyId",cid);m.put("sim",sim);
     m.put("remoteNumber",remote==null?"":remote);m.put("fromNumber",type.equals("OUTGOING")?sim:remote);
@@ -123,6 +141,7 @@ public class CallStore extends SQLiteOpenHelper {
       if(device.exists() && !"active".equals(device.getString("status")))return Result.success();
     }
    }catch(Exception e){return Result.retry();}
+   if(!CallStore.safeSingleSim(c))return Result.success();
    CallStore s=new CallStore(c);s.scan(c,cid,sim);
    boolean ok=s.uploadBlocking(cid);if(ok)c.getSharedPreferences("settings",0).edit().putLong("lastSync",System.currentTimeMillis()).apply();return ok?Result.success():Result.retry();
   }
