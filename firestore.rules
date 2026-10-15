@@ -17,7 +17,7 @@ service cloud.firestore {
     allow get: if owner(cid) || (signed() && request.auth.uid == uid);
     allow list: if admin(cid);
     allow create: if signed() && request.resource.data.uid == uid && request.resource.data.approved == true && ((uid == request.auth.uid && request.resource.data.role == 'owner' && getAfter(/databases/$(database)/documents/companies/$(cid)).data.ownerUid == uid) || (owner(cid) && request.resource.data.role in ['employee','supervisor','admin']));
-    allow update: if owner(cid) && request.resource.data.uid == resource.data.uid;
+    allow update: if (owner(cid) && request.resource.data.uid == resource.data.uid) || (active(cid) && uid == request.auth.uid && resource.data.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sim']) && request.resource.data.sim is string && request.resource.data.sim.matches('\\+[0-9]{8,15}'));
     allow delete: if owner(cid) && uid != request.auth.uid;
    }
    match /join_requests/{uid} {
