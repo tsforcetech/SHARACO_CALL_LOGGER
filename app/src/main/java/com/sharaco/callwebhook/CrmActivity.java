@@ -2,6 +2,9 @@ package com.sharaco.callwebhook;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -44,6 +47,7 @@ public class CrmActivity extends Activity {
   button("Pending",()->list("pending"));
   button("Interested",()->list("interested"));
   button("Follow-up due today",()->dueList());
+  button("Enable due follow-up reminders",()->{if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},45);}else{FollowUpWorker.schedule(this);toast("Follow-up reminders enabled");}});
   button("All follow-ups",()->list("follow_up"));
   button("Won",()->list("won"));
   button("Lost",()->list("lost"));
@@ -100,7 +104,7 @@ public class CrmActivity extends Activity {
    button("Save Follow-up",()->{
     String state=(String)status.getSelectedItem(),note=remarks.getText().toString().trim(),date=next.getText().toString().trim();
     if(note.length()>1000){remarks.setError("Maximum 1000 characters");return;}
-    if(!date.isEmpty()&&!date.matches("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}")){next.setError("Use YYYY-MM-DD HH:MM");return;}
+    if(!date.isEmpty()){try{SimpleDateFormat fmt=new SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US);fmt.setLenient(false);if(!date.equals(fmt.format(fmt.parse(date))))throw new IllegalArgumentException();}catch(Exception invalid){next.setError("Enter a valid date and time: YYYY-MM-DD HH:mm");return;}}
     Map<String,Object> updates=new HashMap<>();updates.put("status",state);updates.put("outcome",note);updates.put("nextFollowUp",date);
     updates.put("updatedAt",FieldValue.serverTimestamp());updates.put("lastUpdatedBy",uid);
     d.getReference().update(updates).addOnSuccessListener(v->{toast("Lead updated");details(id);}).addOnFailureListener(e->toast("Save failed: "+e.getLocalizedMessage()));
@@ -108,5 +112,6 @@ public class CrmActivity extends Activity {
    button("Back to list",()->list(null));
   }).addOnFailureListener(e->toast("Unable to open lead: "+e.getLocalizedMessage()));
  }
+ @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] grants){super.onRequestPermissionsResult(request,permissions,grants);if(request==45&&grants.length>0&&grants[0]==PackageManager.PERMISSION_GRANTED){FollowUpWorker.schedule(this);toast("Follow-up reminders enabled");}}
  @Override public void onBackPressed(){finish();}
 }
