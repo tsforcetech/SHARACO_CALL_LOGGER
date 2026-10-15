@@ -90,7 +90,11 @@ public class ReportActivity extends Activity {
    if(loadAllPages && !reachedEnd){loadNext();}else if(loadAllPages){loadAllPages=false;toast("All available matching calls loaded");}
   }).addOnFailureListener(e->{loading=false;loadAllPages=false;toast("Report error: "+e.getLocalizedMessage());});
  }
- String csv(String s){String value=s==null?"":s; if(!value.isEmpty() && "=+-@".indexOf(value.charAt(0))>=0)value="'"+value; return "\\\"" + value.replace("\\\"","\\\"\\\"")+"\\\"";}
+ String csv(String s){
+  String value=s==null?"":s;
+  if(!value.isEmpty() && "=+-@".indexOf(value.charAt(0))>=0)value="'"+value;
+  return "\\"" + value.replace("\\"","\\"\\"") + "\\"";
+ }
  @Override protected void onActivityResult(int request,int result,Intent data){
   super.onActivityResult(request,result,data);
   if(request!=SAVE_CSV||result!=RESULT_OK||data==null||data.getData()==null)return;
