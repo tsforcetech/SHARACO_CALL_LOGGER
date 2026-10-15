@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v2.3.0 company-bound consent and capture boundary
+# Release v2.4.0 SIM attribution safeguards
 on:
   workflow_dispatch:
   push:
