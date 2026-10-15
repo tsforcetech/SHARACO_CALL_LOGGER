@@ -19,7 +19,9 @@ public class ReportActivity extends Activity {
  String cid,uid;
  FirebaseFirestore db;
  LinearLayout root;
- EditText from,to;
+ EditText from,to,employeeFilter;
+ Spinner typeFilter;
+ String selectedEmployee="",selectedType="ALL";
  ArrayList<String[]> rows=new ArrayList<>();
  boolean loading=false;
  boolean loadAllPages=false;
@@ -46,6 +48,10 @@ public class ReportActivity extends Activity {
   label("Filter calls by date (YYYY-MM-DD), then export results to CSV.");
   from=new EditText(this);from.setHint("From date · YYYY-MM-DD");root.addView(from);
   to=new EditText(this);to.setHint("To date · YYYY-MM-DD");root.addView(to);
+  employeeFilter=new EditText(this);employeeFilter.setSingleLine(true);employeeFilter.setHint("Employee UID · optional");root.addView(employeeFilter);
+  typeFilter=new Spinner(this);String[] types={"ALL","INCOMING","OUTGOING","MISSED","REJECTED","BLOCKED","OTHER"};
+  ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,types);typeFilter.setAdapter(adapter);root.addView(typeFilter);
+  label("Employee and call type filters apply to every loaded page. For complete counts, use Load entire date range.");
   button("Load company calls",()->load());
   button("Load next 500 calls",()->loadNext());
   button("Load entire date range",()->{if(reportQuery==null){toast("Load report first");return;}loadAllPages=true;loadNext();});
@@ -63,6 +69,7 @@ public class ReportActivity extends Activity {
   if((begin!=null&&begin<0)||(end!=null&&end<0)){toast("Use valid dates in YYYY-MM-DD format");return;}
   if(begin!=null&&end!=null&&begin>end){toast("From date must be before To date");return;}
   if(loading)return;
+  selectedEmployee=employeeFilter.getText().toString().trim();selectedType=typeFilter.getSelectedItem().toString();
   loadAllPages=false;reachedEnd=false;rows.clear();fetched=0;incoming=0;outgoing=0;missed=0;totalDuration=0;cursor=null;
   reportQuery=db.collection("companies").document(cid).collection("call_logs").orderBy("startedAt",Query.Direction.DESCENDING);
   if(begin!=null)reportQuery=reportQuery.whereGreaterThanOrEqualTo("startedAt",begin);
@@ -80,13 +87,16 @@ public class ReportActivity extends Activity {
    loading=false;fetched+=s.size();
    for(DocumentSnapshot d:s){
     Long at=d.getLong("startedAt");if(at==null)continue;
-    String type=d.getString("type");if("INCOMING".equals(type))incoming++;if("OUTGOING".equals(type))outgoing++;if("MISSED".equals(type))missed++;
+    String type=d.getString("type");
+    if(!selectedEmployee.isEmpty() && !selectedEmployee.equals(d.getString("uid")))continue;
+    if(!"ALL".equals(selectedType) && !selectedType.equals(type))continue;
+    if("INCOMING".equals(type))incoming++;if("OUTGOING".equals(type))outgoing++;if("MISSED".equals(type))missed++;
     Long duration=d.getLong("durationSec");long seconds=duration==null?0:duration;totalDuration+=seconds;
     rows.add(new String[]{d.getString("uid"),d.getString("sim"),d.getString("remoteNumber"),type,String.valueOf(at),String.valueOf(seconds),d.getString("contactName")});
    }
    if(!s.isEmpty())cursor=s.getDocuments().get(s.size()-1);
    reachedEnd=s.size()<500;
-   summary.setText("Loaded: "+rows.size()+" calls | Incoming "+incoming+" | Outgoing "+outgoing+" | Missed "+missed+" | Duration "+(totalDuration/60)+" minutes"+(s.size()<500?" | End of records":" | More pages available"));
+   summary.setText("Matching: "+rows.size()+" calls | Incoming "+incoming+" | Outgoing "+outgoing+" | Missed "+missed+" | Duration "+(totalDuration/60)+" minutes"+(s.size()<500?" | End of records":" | More pages available"));
    if(loadAllPages && !reachedEnd){loadNext();}else if(loadAllPages){loadAllPages=false;toast("All available matching calls loaded");}
   }).addOnFailureListener(e->{loading=false;loadAllPages=false;toast("Report error: "+e.getLocalizedMessage());});
  }
