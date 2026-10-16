@@ -38,7 +38,9 @@ public class CallStore extends SQLiteOpenHelper {
     String number=cursor.getString(1);int t=cursor.getInt(2);
     String type=t==CallLog.Calls.INCOMING_TYPE?"INCOMING":t==CallLog.Calls.OUTGOING_TYPE?"OUTGOING":t==CallLog.Calls.MISSED_TYPE?"MISSED":t==CallLog.Calls.REJECTED_TYPE?"REJECTED":t==CallLog.Calls.BLOCKED_TYPE?"BLOCKED":"OTHER";
     String contact=contact(c,number);
-    ContentValues v=new ContentValues();v.put("id",company+"_"+uid+"_"+row);v.put("company",company);v.put("uid",uid);v.put("sim",sim);v.put("remote",number);v.put("contact",contact);v.put("calltype",type);v.put("startms",ms);v.put("duration",duration);
+    ContentValues v=new ContentValues();String install=c.getSharedPreferences("device_install",0).getString("deviceId","");
+    if(install.isEmpty())return;
+    v.put("id",company+"_"+uid+"_"+install+"_"+row);v.put("company",company);v.put("uid",uid);v.put("sim",sim);v.put("remote",number);v.put("contact",contact);v.put("calltype",type);v.put("startms",ms);v.put("duration",duration);
     getWritableDatabase().insertWithOnConflict("calls",null,v,SQLiteDatabase.CONFLICT_IGNORE);
    }
   }catch(Exception ignored){}
@@ -99,7 +101,7 @@ public class CallStore extends SQLiteOpenHelper {
  public static void schedule(Context c){
   Constraints network=new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
   PeriodicWorkRequest task=new PeriodicWorkRequest.Builder(SyncWorker.class,15,TimeUnit.MINUTES).setConstraints(network).build();
-  WorkManager.getInstance(c).enqueueUniquePeriodicWork("call-sync",ExistingPeriodicWorkPolicy.UPDATE,task);
+  WorkManager.getInstance(c).enqueueUniquePeriodicWork("call-sync",ExistingPeriodicWorkPolicy.KEEP,task);
   syncNow(c);
  }
  public static void syncNow(Context c){
@@ -111,27 +113,32 @@ public class CallStore extends SQLiteOpenHelper {
   WorkManager.getInstance(c).cancelUniqueWork("call-sync-now");
   WorkManager.getInstance(c).cancelUniqueWork("call-sync");
  }
+ public static Result pause(android.content.SharedPreferences status,String reason){status.edit().putString("status",reason).apply();return Result.success();}
  public static class SyncWorker extends Worker {
   public SyncWorker(Context c,WorkerParameters p){super(c,p);}
   @Override public Result doWork(){
    Context c=getApplicationContext();
+   android.content.SharedPreferences state=c.getSharedPreferences("sync_diagnostics",0);
+   state.edit().putLong("lastAttempt",System.currentTimeMillis()).putString("status","Checking prerequisites").apply();
    String cid=c.getSharedPreferences("settings",0).getString("syncCompany","");
    String sim=c.getSharedPreferences("settings",0).getString("syncSim","");
-   if(FirebaseAuth.getInstance().getUid()==null || cid.isEmpty() || sim.isEmpty())return Result.success();
-   if(!c.getSharedPreferences("settings",0).getBoolean("syncConsent",false) || !cid.equals(c.getSharedPreferences("settings",0).getString("syncConsentCompany","")))return Result.success();
-   if(c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L)<=0L)return Result.success();
+   if(FirebaseAuth.getInstance().getUid()==null || cid.isEmpty() || sim.isEmpty())return pause(state,"Sign in and register company SIM");
+   if(!c.getSharedPreferences("settings",0).getBoolean("syncConsent",false) || !cid.equals(c.getSharedPreferences("settings",0).getString("syncConsentCompany","")))return pause(state,"Consent not enabled for this company");
+   if(c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L)<=0L)return pause(state,"Consent start time missing");
    try{
     DocumentSnapshot member=Tasks.await(FirebaseFirestore.getInstance().collection("companies").document(cid).collection("members").document(FirebaseAuth.getInstance().getUid()).get(),30,TimeUnit.SECONDS);
-    if(!Boolean.TRUE.equals(member.getBoolean("approved")) || !sim.equals(member.getString("sim")))return Result.success();
+    if(!Boolean.TRUE.equals(member.getBoolean("approved")) || !sim.equals(member.getString("sim")))return pause(state,"Company membership or SIM not verified");
     String deviceId=c.getSharedPreferences("device_install",0).getString("deviceId","");
     if(!deviceId.isEmpty()){
       DocumentSnapshot device=Tasks.await(FirebaseFirestore.getInstance().collection("companies").document(cid).collection("devices").document(FirebaseAuth.getInstance().getUid()+"_"+deviceId).get(),30,TimeUnit.SECONDS);
-      if(!device.exists() || !"active".equals(device.getString("status")) || !FirebaseAuth.getInstance().getUid().equals(device.getString("uid")))return Result.success();
-    }else return Result.success();
-   }catch(Exception e){return Result.retry();}
-   if(!CallStore.safeSingleSim(c))return Result.success();
+      if(!device.exists() || !"active".equals(device.getString("status")) || !FirebaseAuth.getInstance().getUid().equals(device.getString("uid")))return pause(state,"Registered device is inactive or unavailable");
+    }else return pause(state,"Register this device before syncing");
+   }catch(Exception e){state.edit().putString("status","Verification failed; retry queued").apply();return Result.retry();}
+   if(!CallStore.safeSingleSim(c))return pause(state,"Only verified single-SIM phones can sync");
    CallStore s=new CallStore(c);s.scan(c,cid,sim);
-   boolean ok=s.uploadBlocking(cid,c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L));if(ok)c.getSharedPreferences("settings",0).edit().putLong("lastSync",System.currentTimeMillis()).apply();return ok?Result.success():Result.retry();
+   boolean ok=s.uploadBlocking(cid,c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L));
+   if(ok){c.getSharedPreferences("settings",0).edit().putLong("lastSync",System.currentTimeMillis()).apply();state.edit().putString("status","Completed").putLong("lastSuccess",System.currentTimeMillis()).apply();return Result.success();}
+   state.edit().putString("status","Upload failed; retry scheduled").apply();return Result.retry();
   }
  }
 }
