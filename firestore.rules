@@ -80,7 +80,7 @@ service cloud.firestore {
       && get(/databases/$(database)/documents/companies/$(cid)/devices/$(request.auth.uid + '_' + request.resource.data.deviceId)).data.status == 'active'
       && get(/databases/$(database)/documents/companies/$(cid)/devices/$(request.auth.uid + '_' + request.resource.data.deviceId)).data.uid == request.auth.uid
       && request.resource.data.deviceCallId == callId
-      && request.resource.data.type in ['INCOMING','OUTGOING','MISSED','REJECTED','BLOCKED','OTHER']
+      && request.resource.data.type in ['INCOMING','OUTGOING','MISSED','REJECTED','BLOCKED','VOICEMAIL','ANSWERED_EXTERNALLY','OTHER']
       && request.resource.data.startedAt is int
       && request.resource.data.durationSec is int
       && request.resource.data.durationSec >= 0
