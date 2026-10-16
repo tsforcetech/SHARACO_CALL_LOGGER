@@ -25,7 +25,7 @@ public class CallStore extends SQLiteOpenHelper {
  @Override public void onUpgrade(SQLiteDatabase d,int o,int n){}
  public synchronized void scan(Context c,String company,String sim){
   if(c.checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)return;
-  if(company==null||company.isEmpty()||sim==null||sim.isEmpty())return;
+  if(company==null||company.isEmpty()||sim==null)return;
   String uid=FirebaseAuth.getInstance().getUid();if(uid==null)return;
   long consentStart=c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L);
   if(consentStart<=0L)return;
@@ -155,10 +155,10 @@ public class CallStore extends SQLiteOpenHelper {
   @Override public Result doWork(){
    Context c=getApplicationContext();
    android.content.SharedPreferences state=c.getSharedPreferences("sync_diagnostics",0);
-   state.edit().putLong("lastAttempt",System.currentTimeMillis()).putString("status","Checking prerequisites").apply();
+   state.edit().putLong("lastAttempt",System.currentTimeMillis()).putString("status","Running: checking company authorization").apply();
    String cid=c.getSharedPreferences("settings",0).getString("syncCompany","");
    String sim=c.getSharedPreferences("settings",0).getString("syncSim","");
-   if(FirebaseAuth.getInstance().getUid()==null || cid.isEmpty() || sim.isEmpty())return pause(state,"Sign in and register company SIM");
+   if(FirebaseAuth.getInstance().getUid()==null || cid.isEmpty())return pause(state,"Sign in and select your approved company");
    if(!c.getSharedPreferences("settings",0).getBoolean("syncConsent",false) || !cid.equals(c.getSharedPreferences("settings",0).getString("syncConsentCompany","")))return pause(state,"Consent not enabled for this company");
    if(c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L)<=0L)return pause(state,"Consent start time missing");
    try{
@@ -171,10 +171,15 @@ public class CallStore extends SQLiteOpenHelper {
     }else return pause(state,"Register this device before syncing");
    }catch(Exception e){state.edit().putString("status","Verification failed; retry queued").apply();return Result.retry();}
    if(c.checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)return pause(state,"Grant Android call-log access to synchronize");
+   state.edit().putString("status","Running: scanning phone call history").apply();
    CallStore s=new CallStore(c);s.scan(c,cid,sim);
    long consent=c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L);
    int initial=s.eligiblePending(cid,sim,consent);
    state.edit().putInt("lastEligibleCount",initial).apply();
+   if(c.getSharedPreferences("sync_diagnostics",0).contains("scanError")){
+    state.edit().putString("status","Call log scan failed: "+state.getString("scanError","unknown")).apply();return Result.retry();
+   }
+   state.edit().putString("status","Running: uploading eligible records").apply();
    if(!s.uploadBlocking(cid,sim,consent)){
     state.edit().putString("status","Upload failed; retry scheduled").apply();return Result.retry();
    }
