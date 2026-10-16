@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v3.1.1 complete onboarding including existing company recovery
+# Release v3.2.0 multi employee filters and login-time device consent
 on:
   workflow_dispatch:
   push:
