@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
   }else{
     sectionTitle("Account & company");
     menuItem("▤","Switch Company","Choose a different workspace",()->home());
-    menuItem("⇥","Sign Out","Sign out of Google and Sharaco",()->{CallStore.stop(this);auth.signOut();company="";getSharedPreferences("settings",0).edit().clear().apply();section="";home();});
+    menuItem("⇥","Sign Out","Sign out of Google and Sharaco",()->{CallStore.stop(this);FollowUpWorker.stop(this);auth.signOut();company="";getSharedPreferences("settings",0).edit().clear().apply();section="";home();});
   }
  }
  boolean isAdmin(){return "owner".equals(role)||"admin".equals(role);}
@@ -119,7 +119,7 @@ public class MainActivity extends Activity {
   menuItem("▦","Join Company","Scan the QR code supplied by your manager",()->scanJoin());
   String pending=getSharedPreferences("settings",0).getString("pendingCompany","");
   if(!pending.isEmpty())menuItem("✓","Check Join Approval","Open a company after owner approval",()->choose(pending,""));
-  button("Sign out",()->{auth.signOut();company="";getSharedPreferences("settings",0).edit().clear().apply();home();});
+  button("Sign out",()->{CallStore.stop(this);FollowUpWorker.stop(this);auth.signOut();company="";getSharedPreferences("settings",0).edit().clear().apply();home();});
  }
  void login(){
    label("Welcome to Sharaco Call Logger");
