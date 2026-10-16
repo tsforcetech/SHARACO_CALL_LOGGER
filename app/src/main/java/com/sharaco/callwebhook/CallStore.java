@@ -76,10 +76,16 @@ public class CallStore extends SQLiteOpenHelper {
   int result=0;try(Cursor x=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM calls WHERE company=? AND uid=? AND uploaded=1",new String[]{cid,FirebaseAuth.getInstance().getUid()==null?"":FirebaseAuth.getInstance().getUid()})){if(x.moveToFirst())result=x.getInt(0);}return result;
  }
  public static long lastSync(Context c){return c.getSharedPreferences("settings",0).getLong("lastSync",0);}
- public synchronized boolean uploadBlocking(String companyId,long consentStartedAt){
+ public synchronized int eligiblePending(String companyId,String sim,long consentStartedAt){
+  String uid=FirebaseAuth.getInstance().getUid();if(uid==null)return 0;
+  try(Cursor x=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM calls WHERE uploaded=0 AND uid=? AND company=? AND sim=? AND startms>=?",new String[]{uid,companyId,sim,String.valueOf(consentStartedAt)})){
+   return x.moveToFirst()?x.getInt(0):0;
+  }
+ }
+ public synchronized boolean uploadBlocking(String companyId,String registeredSim,long consentStartedAt){
   String current=FirebaseAuth.getInstance().getUid();if(current==null)return false;
   boolean success=true;
-  try(Cursor x=getReadableDatabase().rawQuery("SELECT id,company,uid,sim,remote,contact,calltype,startms,duration FROM calls WHERE uploaded=0 AND uid=? AND company=? AND startms>=? ORDER BY startms ASC LIMIT 250",new String[]{current,companyId,String.valueOf(consentStartedAt)})){
+  try(Cursor x=getReadableDatabase().rawQuery("SELECT id,company,uid,sim,remote,contact,calltype,startms,duration FROM calls WHERE uploaded=0 AND uid=? AND company=? AND sim=? AND startms>=? ORDER BY startms ASC LIMIT 100",new String[]{current,companyId,registeredSim,String.valueOf(consentStartedAt)})){
    while(x.moveToNext()){
     String id=x.getString(0),cid=x.getString(1),owner=x.getString(2),sim=x.getString(3),remote=x.getString(4),contact=x.getString(5),type=x.getString(6);
     if(!cid.equals(companyId))continue;
@@ -136,9 +142,21 @@ public class CallStore extends SQLiteOpenHelper {
    }catch(Exception e){state.edit().putString("status","Verification failed; retry queued").apply();return Result.retry();}
    if(!CallStore.safeSingleSim(c))return pause(state,"Only verified single-SIM phones can sync");
    CallStore s=new CallStore(c);s.scan(c,cid,sim);
-   boolean ok=s.uploadBlocking(cid,c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L));
-   if(ok){c.getSharedPreferences("settings",0).edit().putLong("lastSync",System.currentTimeMillis()).apply();state.edit().putString("status","Completed").putLong("lastSuccess",System.currentTimeMillis()).apply();return Result.success();}
-   state.edit().putString("status","Upload failed; retry scheduled").apply();return Result.retry();
+   long consent=c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L);
+   int initial=s.eligiblePending(cid,sim,consent);
+   state.edit().putInt("lastEligibleCount",initial).apply();
+   if(!s.uploadBlocking(cid,sim,consent)){
+    state.edit().putString("status","Upload failed; retry scheduled").apply();return Result.retry();
+   }
+   int remaining=s.eligiblePending(cid,sim,consent);
+   if(remaining>0){
+    state.edit().putString("status","Uploaded first batch; "+remaining+" calls still queued").apply();
+    return Result.retry();
+   }
+   c.getSharedPreferences("settings",0).edit().putLong("lastSync",System.currentTimeMillis()).apply();
+   state.edit().putString("status","Completed; all eligible calls uploaded").putInt("lastEligibleCount",0)
+      .putLong("lastSuccess",System.currentTimeMillis()).apply();
+   return Result.success();
   }
  }
 }
