@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v2.12.0 device-bound call uploads and stable consent start
+# Release v3.0.0 shared design system across Android screens
 on:
   workflow_dispatch:
   push:
