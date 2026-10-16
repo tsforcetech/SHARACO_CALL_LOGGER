@@ -71,7 +71,8 @@ public class MainActivity extends Activity {
     sectionTitle("Your calling workspace");
     menuItem("♙","My SIM Number","Register your own company calling number",()->ownSim());
     menuItem("☏","Assigned Numbers","View numbers and update contacted status",()->{Intent i=new Intent(this,WorklistActivity.class);i.putExtra("company",company);startActivity(i);});
-    menuItem("◷","Call History","Review calls saved on this device",()->localHistory());
+    menuItem("◷","Local Call History","Calls saved on this device including pending uploads",()->localHistory());
+    menuItem("☁","Synced Call History","My uploaded call history from Firebase",()->syncedHistory());
     menuItem("☷","Sync Health","Pending records, upload status and last sync",()->syncHealth());
 
 
@@ -346,6 +347,7 @@ public class MainActivity extends Activity {
     .addOnFailureListener(e->toast("Device registration failed: "+e.getLocalizedMessage()));
   }).addOnFailureListener(e->toast("Unable to check device registration: "+e.getLocalizedMessage()));
  }
+ long startOfToday(){java.util.Calendar day=java.util.Calendar.getInstance();day.set(java.util.Calendar.HOUR_OF_DAY,0);day.set(java.util.Calendar.MINUTE,0);day.set(java.util.Calendar.SECOND,0);day.set(java.util.Calendar.MILLISECOND,0);return day.getTimeInMillis();}
  void maybeAskSyncConsent(String cid){
   if(cid.equals(promptedCompany)||!cid.equals(company))return;
   promptedCompany=cid;
@@ -356,7 +358,7 @@ public class MainActivity extends Activity {
    .setMessage("SHARACO will read call metadata after you consent and upload it to this company's Firebase database, including phone numbers, call times, durations and optional contact names. You can pause sync later.")
    .setPositiveButton("Allow",(dialog,which)->{
     prefs.edit().putBoolean("syncConsent",true).putString("syncConsentCompany",cid)
-     .putLong("syncConsentStartedAt",System.currentTimeMillis()).apply();askMissingPermissions();
+     .putLong("syncConsentStartedAt",startOfToday()).apply();askMissingPermissions();
    }).setNegativeButton("Not now",(dialog,which)->CallStore.stop(this)).show();
  }
  void askMissingPermissions(){
@@ -485,7 +487,7 @@ public class MainActivity extends Activity {
   label("Accuracy safeguard: call uploads are paused on dual-SIM and unverifiable devices until SIM-specific attribution is supported.");
   boolean enabled=getSharedPreferences("settings",0).getBoolean("syncConsent",false) && company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany",""));
   label("Current setting: "+(enabled?"Enabled":"Disabled"));
-  button("Enable Automatic Sync",()->{android.content.SharedPreferences preferences=getSharedPreferences("settings",0);long consentStart=(preferences.getBoolean("syncConsent",false)&&company.equals(preferences.getString("syncConsentCompany","")))?preferences.getLong("syncConsentStartedAt",0L):0L;if(consentStart<=0L)consentStart=System.currentTimeMillis();preferences.edit().putBoolean("syncConsent",true).putString("syncConsentCompany",company).putLong("syncConsentStartedAt",consentStart).apply();if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED || checkSelfPermission(Manifest.permission.READ_PHONE_STATE)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_PHONE_STATE},12);else CallStore.schedule(this);toast("Automatic sync enabled");syncPrivacy();});
+  button("Enable Automatic Sync",()->{android.content.SharedPreferences preferences=getSharedPreferences("settings",0);long consentStart=(preferences.getBoolean("syncConsent",false)&&company.equals(preferences.getString("syncConsentCompany","")))?preferences.getLong("syncConsentStartedAt",0L):0L;if(consentStart<=0L)consentStart=startOfToday();preferences.edit().putBoolean("syncConsent",true).putString("syncConsentCompany",company).putLong("syncConsentStartedAt",consentStart).apply();if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED || checkSelfPermission(Manifest.permission.READ_PHONE_STATE)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_PHONE_STATE},12);else CallStore.schedule(this);toast("Automatic sync enabled");syncPrivacy();});
   button("Pause Automatic Sync",()->{getSharedPreferences("settings",0).edit().putBoolean("syncConsent",false).remove("syncConsentCompany").apply();CallStore.stop(this);toast("Background sync paused");syncPrivacy();});
  }
  void ownSim(){
@@ -589,6 +591,33 @@ public class MainActivity extends Activity {
   }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
  }
  void localHistory(){page("Local SIM Call History");for(String row:store.history(company))label(row);button("Back",()->home());}
+ void syncedHistory(){
+  page("My Synced Call History");
+  label("These are your own call records stored in the current company, independent of CRM assignments.");
+  String member=uid(),cid=company;
+  db.collection("companies").document(cid).collection("call_logs")
+   .whereEqualTo("uid",member).limit(200).get(Source.SERVER).addOnSuccessListener(result->{
+    if(!cid.equals(company)||!member.equals(uid()))return;
+    ArrayList<DocumentSnapshot> docs=new ArrayList<>(result.getDocuments());
+    docs.sort((a,b)->Long.compare(b.getLong("startedAt")==null?0:b.getLong("startedAt"),a.getLong("startedAt")==null?0:a.getLong("startedAt")));
+    int incoming=0,outgoing=0,missed=0;long duration=0;
+    for(DocumentSnapshot d:docs){
+     String kind=d.getString("type");
+     if("INCOMING".equals(kind))incoming++;else if("OUTGOING".equals(kind))outgoing++;else if("MISSED".equals(kind))missed++;
+     Long secs=d.getLong("durationSec");duration+=secs==null?0:secs;
+    }
+    label("Recent calls: "+docs.size()+" · Incoming "+incoming+" · Outgoing "+outgoing+" · Missed "+missed+" · Duration "+duration/60+" mins");
+    if(docs.isEmpty())label("No synced calls yet. Verify call-sync health or wait for the background worker.");
+    for(DocumentSnapshot d:docs){
+     Long stamp=d.getLong("startedAt");Long seconds=d.getLong("durationSec");
+     label((d.getString("contactName")==null?"":d.getString("contactName")+" · ")+
+      d.getString("remoteNumber")+"\n"+d.getString("type")+" · "+
+      (stamp==null?"Unknown time":new java.util.Date(stamp).toString())+" · "+
+      (seconds==null?0:seconds)+" sec");
+    }
+  }).addOnFailureListener(e->toast("Cannot fetch synced calls: "+e.getLocalizedMessage()));
+  button("Back",()->showSection("calls"));
+ }
  void teamLogs(){if(!isAdmin()){toast("Access denied");return;}page("Company Call Logs");withAuthorizedCalls(q->q.limit(100).get().addOnSuccessListener(s->{for(DocumentSnapshot d:s)label(d.getString("remoteNumber")+" | "+d.getString("type")+" | "+d.getLong("durationSec")+" sec");} ).addOnFailureListener(e->toast(e.getMessage())));button("Back",()->home());}
  void report(){if(!isAdmin()){toast("Access denied");return;}page("Call Summary");withAuthorizedCalls(q->q.limit(1000).get().addOnSuccessListener(s->{
    long seconds=0;Map<String,Integer> byType=new TreeMap<>();for(DocumentSnapshot d:s){String t=d.getString("type");byType.put(t,byType.getOrDefault(t,0)+1);Long v=d.getLong("durationSec");seconds+=v==null?0:v;}
