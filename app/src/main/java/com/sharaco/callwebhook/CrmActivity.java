@@ -47,7 +47,9 @@ public class CrmActivity extends Activity {
   button("Pending",()->list("pending"));
   button("Interested",()->list("interested"));
   button("Follow-up due today",()->dueList());
-  button("Enable due follow-up reminders",()->{if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},45);}else{FollowUpWorker.schedule(this);toast("Follow-up reminders enabled");}});
+  label("Reminders are optional and checked periodically; Android may delay delivery.");
+  button("Enable due follow-up reminders",()->{if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},45);}else{FollowUpWorker.schedule(this,company,uid);toast("Follow-up reminders enabled");}});
+  button("Disable follow-up reminders",()->{FollowUpWorker.stop(this);toast("Follow-up reminders disabled");});
   button("All follow-ups",()->list("follow_up"));
   button("Won",()->list("won"));
   button("Lost",()->list("lost"));
@@ -112,6 +114,6 @@ public class CrmActivity extends Activity {
    button("Back to list",()->list(null));
   }).addOnFailureListener(e->toast("Unable to open lead: "+e.getLocalizedMessage()));
  }
- @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] grants){super.onRequestPermissionsResult(request,permissions,grants);if(request==45&&grants.length>0&&grants[0]==PackageManager.PERMISSION_GRANTED){FollowUpWorker.schedule(this);toast("Follow-up reminders enabled");}}
+ @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] grants){super.onRequestPermissionsResult(request,permissions,grants);if(request==45&&grants.length>0&&grants[0]==PackageManager.PERMISSION_GRANTED){FollowUpWorker.schedule(this,company,uid);toast("Follow-up reminders enabled");}}
  @Override public void onBackPressed(){finish();}
 }
