@@ -30,20 +30,23 @@ public class CallStore extends SQLiteOpenHelper {
   long consentStart=c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L);
   if(consentStart<=0L)return;
   String[] cols={CallLog.Calls._ID,CallLog.Calls.NUMBER,CallLog.Calls.TYPE,CallLog.Calls.DATE,CallLog.Calls.DURATION};
+  int scanned=0,inserted=0;
   try(Cursor cursor=c.getContentResolver().query(CallLog.Calls.CONTENT_URI,cols,null,null,CallLog.Calls.DATE+" DESC")){
    if(cursor==null)return;int count=0;
    while(cursor.moveToNext()&&count++<2000){
     long row=cursor.getLong(0),ms=cursor.getLong(3),duration=cursor.getLong(4);
     if(ms<consentStart)break;
+    scanned++;
     String number=cursor.getString(1);int t=cursor.getInt(2);
     String type=callType(t);
     String contact=contact(c,number);
     ContentValues v=new ContentValues();String install=c.getSharedPreferences("device_install",0).getString("deviceId","");
     if(install.isEmpty())return;
     v.put("id",company+"_"+uid+"_"+install+"_"+row);v.put("company",company);v.put("uid",uid);v.put("sim",sim);v.put("remote",number);v.put("contact",contact);v.put("calltype",type);v.put("startms",ms);v.put("duration",duration);
-    getWritableDatabase().insertWithOnConflict("calls",null,v,SQLiteDatabase.CONFLICT_IGNORE);
+    if(getWritableDatabase().insertWithOnConflict("calls",null,v,SQLiteDatabase.CONFLICT_IGNORE)!=-1)inserted++;
    }
-  }catch(Exception ignored){}
+  }catch(Exception error){c.getSharedPreferences("sync_diagnostics",0).edit().putString("scanError",error.getClass().getSimpleName()).apply();return;}
+  c.getSharedPreferences("sync_diagnostics",0).edit().putInt("lastScanned",scanned).putInt("lastNewLocal",inserted).remove("scanError").apply();
  }
  /** Preserve all standard Android phone-log categories without inferring a call outcome. */
  public static String callType(int androidType){
