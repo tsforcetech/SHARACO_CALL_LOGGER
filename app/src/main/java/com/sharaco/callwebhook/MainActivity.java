@@ -33,6 +33,7 @@ public class MainActivity extends Activity {
  String section="";
  static final int GOOGLE_REQUEST=712;
  boolean signingIn=false;
+ boolean syncPromptShown=false;
  int teal=UiKit.BRAND;
  int ink=UiKit.INK;
  GradientDrawable rounded(int color,int r){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(r);return d;}
@@ -72,11 +73,11 @@ public class MainActivity extends Activity {
     menuItem("☏","Assigned Numbers","View numbers and update contacted status",()->{Intent i=new Intent(this,WorklistActivity.class);i.putExtra("company",company);startActivity(i);});
     menuItem("◷","Call History","Review calls saved on this device",()->localHistory());
     menuItem("☷","Sync Health","Pending records, upload status and last sync",()->syncHealth());
-    menuItem("✓","Sync Consent & Privacy","Control whether calls upload automatically",()->syncPrivacy());
-    menuItem("▣","This Device","Register this phone in your company",()->openDevices());
+
+
     menuItem("◉","Lead Follow-ups","Update lead status and next actions",()->openCrm());
     menuItem("↻","Sync Now","Queue call history upload to Firebase",()->{if(!getSharedPreferences("settings",0).getBoolean("syncConsent",false) || !company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany",""))){syncPrivacy();return;}CallStore.schedule(this);toast("Background sync queued");});
-    menuItem("✓","Call Access","Grant Android call-history permissions",()->{if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS,Manifest.permission.READ_PHONE_STATE},12);else {CallStore.schedule(this);toast("Permission already granted");}});
+
   }else if(type.equals("team")){
     sectionTitle("Team administration");
     menuItem("▦","Company QR Code","Invite employees to this company",()->showQr());
@@ -319,6 +320,7 @@ public class MainActivity extends Activity {
    if("owner".equals(role)||"admin".equals(role))menuItem("♙","Team Management","QR joining, approvals and permissions",()->showSection("team"));
    if(isAdmin())menuItem("⚙","Company Configuration","Company administration and configuration",()->showSection("settings"));
    label("Signed in as "+role+"   ·   SIM "+(sim.isEmpty()?"not set":sim));
+   registerDeviceAutomatically(company);
   }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
  }
  void openDevices(){Intent i=new Intent(this,DeviceActivity.class);i.putExtra("company",company);startActivity(i);}
@@ -340,10 +342,11 @@ public class MainActivity extends Activity {
   label("Android call-log permission: "+(permission?"Granted":"Not granted"));
   label("My SIM: "+(sim.isEmpty()?"Not registered":sim));
   label("Call attribution check: "+(CallStore.safeSingleSim(this)?"One active SIM verified":"Not verified. Sync will pause until one active SIM and Phone permission are available."));
-  label("To synchronize calls, register this device in Company Devices and obtain owner approval if required. An inactive or unregistered device cannot upload.");
+  label("This device is automatically registered when you open your approved company.");
   label("Android schedules periodic work approximately every 15 minutes. Battery optimization, connectivity, sign-in and device policies can delay sync.");
-  button("Register or Check Device",()->openDevices());
+
   label("Automatic upload consent for this company: "+(getSharedPreferences("settings",0).getBoolean("syncConsent",false)&&company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany",""))?"Enabled":"Disabled"));
+  button("Manage sync consent",()->syncPrivacy());
   button("Queue upload now",()->{if(!getSharedPreferences("settings",0).getBoolean("syncConsent",false)||!company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany",""))){toast("Enable consent for this company first");return;}CallStore.syncNow(this);toast("Upload requested; check Worker status after a short delay");});
   button("Refresh sync status",()->syncHealth());
  }
