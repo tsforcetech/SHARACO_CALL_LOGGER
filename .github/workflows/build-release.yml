@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v3.3.0 standalone call reports and employee history/worklists
+# Release v3.4.0 incoming outgoing missed rejected blocked voicemail answered elsewhere
 on:
   workflow_dispatch:
   push:
