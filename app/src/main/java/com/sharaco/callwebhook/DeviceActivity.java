@@ -30,8 +30,21 @@ public class DeviceActivity extends Activity {
   button("Back to company",()->finish());
  }
  void register(){
-  Map<String,Object> data=new HashMap<>();data.put("uid",uid);data.put("model",Build.MANUFACTURER+" "+Build.MODEL);data.put("androidVersion",Build.VERSION.RELEASE);data.put("lastSeen",FieldValue.serverTimestamp());data.put("status","active");
-  devices().document(uid+"_"+deviceId).set(data,SetOptions.merge()).addOnSuccessListener(v->message("Device registered")).addOnFailureListener(e->message("Unable to register: "+e.getMessage()));
+  DocumentReference ref=devices().document(uid+"_"+deviceId);
+  ref.get().addOnSuccessListener(old->{
+   if(old.exists() && !"active".equals(old.getString("status"))){
+    message("This device has been disabled by an administrator. Contact your company owner.");return;
+   }
+   Map<String,Object> data=new HashMap<>();
+   data.put("uid",uid);data.put("model",Build.MANUFACTURER+" "+Build.MODEL);
+   data.put("androidVersion",Build.VERSION.RELEASE);
+   data.put("lastSeen",FieldValue.serverTimestamp());data.put("status","active");
+   ref.set(data,SetOptions.merge()).addOnSuccessListener(v->{
+    message("Device registered. Automatic sync requires call permissions and company consent.");
+    android.content.SharedPreferences sp=getSharedPreferences("settings",0);
+    if(sp.getBoolean("syncConsent",false) && cid.equals(sp.getString("syncConsentCompany","")))CallStore.schedule(this);
+   }).addOnFailureListener(e->message("Registration failed: "+e.getMessage()));
+  }).addOnFailureListener(e->message("Cannot verify device status: "+e.getMessage()));
  }
  void list(){if(!admin()){message("Admin access required");return;}page("Registered Devices");
   devices().limit(200).get().addOnSuccessListener(s->{if(s.isEmpty())label("No devices registered");for(DocumentSnapshot d:s){label(d.getString("model")+" · "+d.getString("status")+"\nEmployee: "+d.getString("uid"));
