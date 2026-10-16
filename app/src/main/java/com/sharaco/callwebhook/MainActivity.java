@@ -212,6 +212,7 @@ public class MainActivity extends Activity {
   label("Last background sync: "+(last==0?"Not yet completed":new java.util.Date(last).toString()));
   android.content.SharedPreferences status=getSharedPreferences("sync_diagnostics",0);
   label("Worker status: "+status.getString("status","Never run"));
+  label("Eligible calls at last check: "+status.getInt("lastEligibleCount",0));
   long attempted=status.getLong("lastAttempt",0);
   label("Last attempted: "+(attempted==0?"Not yet":new java.util.Date(attempted).toString()));
   boolean permission=checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED;
@@ -221,7 +222,7 @@ public class MainActivity extends Activity {
   label("To synchronize calls, register this device in Company Devices and obtain owner approval if required. An inactive or unregistered device cannot upload.");
   label("Android schedules periodic work approximately every 15 minutes. Battery optimization, connectivity, sign-in and device policies can delay sync.");
   button("Register or Check Device",()->openDevices());
-  label("Automatic upload consent: "+(getSharedPreferences("settings",0).getBoolean("syncConsent",false)?"Enabled":"Disabled"));
+  label("Automatic upload consent for this company: "+(getSharedPreferences("settings",0).getBoolean("syncConsent",false)&&company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany",""))?"Enabled":"Disabled"));
   button("Queue upload now",()->{if(!getSharedPreferences("settings",0).getBoolean("syncConsent",false)||!company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany",""))){toast("Enable consent for this company first");return;}CallStore.syncNow(this);toast("Upload requested; check Worker status after a short delay");});
   button("Refresh sync status",()->syncHealth());
  }
