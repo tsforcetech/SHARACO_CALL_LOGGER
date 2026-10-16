@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v2.11.0 retry-safe Firestore upload and device registration
+# Release v2.11.0 retry-safe Firestore upload corrected build
 on:
   workflow_dispatch:
   push:
