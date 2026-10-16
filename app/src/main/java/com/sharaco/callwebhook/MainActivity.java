@@ -323,6 +323,47 @@ public class MainActivity extends Activity {
    registerDeviceAutomatically(company);
   }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
  }
+ void registerDeviceAutomatically(String cid){
+  String account=uid();if(account==null||cid.isEmpty())return;
+  android.content.SharedPreferences prefs=getSharedPreferences("device_install",0);
+  String deviceId=prefs.getString("deviceId","");
+  if(deviceId.isEmpty()){deviceId=UUID.randomUUID().toString();prefs.edit().putString("deviceId",deviceId).apply();}
+  DocumentReference ref=db.collection("companies").document(cid).collection("devices").document(account+"_"+deviceId);
+  ref.get(Source.SERVER).addOnSuccessListener(device->{
+   if(!cid.equals(company)||!account.equals(uid()))return;
+   if(device.exists()){
+    if(!"active".equals(device.getString("status"))){toast("Device disabled by administrator");return;}
+    maybeAskSyncConsent(cid);return;
+   }
+   Map<String,Object> m=new HashMap<>();
+   m.put("uid",account);m.put("model",android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL);
+   m.put("androidVersion",android.os.Build.VERSION.RELEASE);
+   m.put("lastSeen",FieldValue.serverTimestamp());m.put("status","active");
+   ref.set(m).addOnSuccessListener(v->{if(cid.equals(company))maybeAskSyncConsent(cid);})
+    .addOnFailureListener(e->toast("Device registration failed: "+e.getLocalizedMessage()));
+  }).addOnFailureListener(e->toast("Unable to check device registration: "+e.getLocalizedMessage()));
+ }
+ void maybeAskSyncConsent(String cid){
+  if(syncPromptShown||!cid.equals(company))return;
+  syncPromptShown=true;
+  android.content.SharedPreferences prefs=getSharedPreferences("settings",0);
+  boolean allowed=prefs.getBoolean("syncConsent",false)&&cid.equals(prefs.getString("syncConsentCompany",""));
+  if(allowed){askMissingPermissions();return;}
+  new android.app.AlertDialog.Builder(this).setTitle("Enable automatic call syncing?")
+   .setMessage("SHARACO will read call metadata after you consent and upload it to this company's Firebase database, including phone numbers, call times, durations and optional contact names. You can pause sync later.")
+   .setPositiveButton("Allow",(dialog,which)->{
+    prefs.edit().putBoolean("syncConsent",true).putString("syncConsentCompany",cid)
+     .putLong("syncConsentStartedAt",System.currentTimeMillis()).apply();askMissingPermissions();
+   }).setNegativeButton("Not now",(dialog,which)->CallStore.stop(this)).show();
+ }
+ void askMissingPermissions(){
+  java.util.ArrayList<String> missing=new java.util.ArrayList<>();
+  if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)missing.add(Manifest.permission.READ_CALL_LOG);
+  if(checkSelfPermission(Manifest.permission.READ_PHONE_STATE)!=PackageManager.PERMISSION_GRANTED)missing.add(Manifest.permission.READ_PHONE_STATE);
+  if(checkSelfPermission(Manifest.permission.READ_CONTACTS)!=PackageManager.PERMISSION_GRANTED)missing.add(Manifest.permission.READ_CONTACTS);
+  if(missing.isEmpty()){CallStore.schedule(this);return;}
+  requestPermissions(missing.toArray(new String[0]),12);
+ }
  void openDevices(){Intent i=new Intent(this,DeviceActivity.class);i.putExtra("company",company);startActivity(i);}
  void openCrm(){
   Intent i=new Intent(this,CrmActivity.class);i.putExtra("company",company);startActivity(i);
