@@ -23,14 +23,14 @@ public class CrmActivity extends Activity {
  GradientDrawable bg(int color){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(30);return d;}
  void page(String title){
   ScrollView scroll=new ScrollView(this);
-  content=new LinearLayout(this);content.setOrientation(1);content.setPadding(24,28,24,28);content.setBackgroundColor(Color.rgb(246,249,250));
+  content=new LinearLayout(this);UiKit.screen(this,content);
   scroll.addView(content);setContentView(scroll);
-  TextView t=new TextView(this);t.setText(title);t.setTextColor(Color.rgb(21,39,47));t.setTextSize(27);t.setTypeface(null,Typeface.BOLD);content.addView(t);
+  TextView t=new TextView(this);t.setText(title);t.setTextColor(Color.rgb(21,39,47));UiKit.heading(t);content.addView(t);
   label("Company workspace  /  Follow-ups");
  }
- void label(String s){TextView t=new TextView(this);t.setText(s);t.setTextSize(15);t.setTextColor(Color.rgb(56,74,76));t.setPadding(6,14,6,10);content.addView(t);}
- void button(String text,Runnable action){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextColor(Color.WHITE);b.setBackground(bg(Color.rgb(0,142,125)));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,7,0,7);content.addView(b,lp);b.setOnClickListener(v->action.run());}
- EditText input(String hint){EditText e=new EditText(this);e.setHint(hint);content.addView(e);return e;}
+ void label(String s){UiKit.cardText(this,content,s,null);}
+ void button(String text,Runnable action){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextColor(Color.WHITE);UiKit.action(this,b,false);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,7,0,7);content.addView(b,lp);b.setOnClickListener(v->action.run());}
+ EditText input(String hint){EditText e=new EditText(this);e.setHint(hint);UiKit.input(this,e);content.addView(e);return e;}
  void toast(String message){Toast.makeText(this,message,Toast.LENGTH_LONG).show();}
  CollectionReference leads(){return db.collection("companies").document(company).collection("assigned_numbers");}
  @Override public void onCreate(Bundle b){
