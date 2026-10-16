@@ -37,7 +37,7 @@ public class CallStore extends SQLiteOpenHelper {
     long row=cursor.getLong(0),ms=cursor.getLong(3),duration=cursor.getLong(4);
     if(ms<consentStart)break;
     String number=cursor.getString(1);int t=cursor.getInt(2);
-    String type=t==CallLog.Calls.INCOMING_TYPE?"INCOMING":t==CallLog.Calls.OUTGOING_TYPE?"OUTGOING":t==CallLog.Calls.MISSED_TYPE?"MISSED":t==CallLog.Calls.REJECTED_TYPE?"REJECTED":t==CallLog.Calls.BLOCKED_TYPE?"BLOCKED":"OTHER";
+    String type=callType(t);
     String contact=contact(c,number);
     ContentValues v=new ContentValues();String install=c.getSharedPreferences("device_install",0).getString("deviceId","");
     if(install.isEmpty())return;
@@ -45,6 +45,19 @@ public class CallStore extends SQLiteOpenHelper {
     getWritableDatabase().insertWithOnConflict("calls",null,v,SQLiteDatabase.CONFLICT_IGNORE);
    }
   }catch(Exception ignored){}
+ }
+ /** Preserve all standard Android phone-log categories without inferring a call outcome. */
+ public static String callType(int androidType){
+  switch(androidType){
+   case CallLog.Calls.INCOMING_TYPE:return "INCOMING";
+   case CallLog.Calls.OUTGOING_TYPE:return "OUTGOING";
+   case CallLog.Calls.MISSED_TYPE:return "MISSED";
+   case CallLog.Calls.VOICEMAIL_TYPE:return "VOICEMAIL";
+   case CallLog.Calls.REJECTED_TYPE:return "REJECTED";
+   case CallLog.Calls.BLOCKED_TYPE:return "BLOCKED";
+   case CallLog.Calls.ANSWERED_EXTERNALLY_TYPE:return "ANSWERED_EXTERNALLY";
+   default:return "OTHER";
+  }
  }
  public static boolean safeSingleSim(Context c){
   if(c.getPackageManager().hasSystemFeature(PackageManager.FEATURE_TELEPHONY_SUBSCRIPTION)){
