@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v3.4.0 incoming outgoing missed rejected blocked voicemail answered elsewhere
+# Release v3.5.0 call history diagnostics
 on:
   workflow_dispatch:
   push:
