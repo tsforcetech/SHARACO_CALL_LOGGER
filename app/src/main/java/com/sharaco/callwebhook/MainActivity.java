@@ -118,7 +118,9 @@ public class MainActivity extends Activity {
      if(!userId.equals(uid())||!currentScreen.equals("Sharaco Call Logger"))return;
      String mode=getSharedPreferences("onboarding",0).getString(userId+"_mode","");
      if(result.isEmpty() && mode.isEmpty()){chooseAccountType();return;}
-     showWorkspaceHome("admin".equals(mode));
+     boolean accountAdmin="admin".equals(mode);
+     for(DocumentSnapshot d:result)if("owner".equals(d.getString("role"))||"admin".equals(d.getString("role")))accountAdmin=true;
+     showWorkspaceHome(accountAdmin);
     }).addOnFailureListener(e->{
      if(!currentScreen.equals("Sharaco Call Logger"))return;
      label("Unable to load your company directory: "+e.getLocalizedMessage());
@@ -372,21 +374,31 @@ public class MainActivity extends Activity {
     ImageView iv=new ImageView(this);iv.setImageBitmap(image);panel.addView(iv);
    }catch(Exception e){toast(e.getMessage());}button("Back",()->home());
   }).addOnFailureListener(e->toast(e.getMessage()));}
- void scanJoin(){new IntentIntegrator(this).setPrompt("Scan company QR").setBeepEnabled(false).initiateScan();}
- @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);IntentResult scan=IntentIntegrator.parseActivityResult(request,result,data);
-  if(request==GOOGLE_REQUEST){finishGoogleLogin(data);return;}if(scan!=null&&scan.getContents()!=null){String[] parts=scan.getContents().split(":");if(parts.length==3&&parts[0].equals("SHARACO"))join(parts[1],parts[2]);else toast("Invalid company code");}}
+ void scanJoin(){startActivityForResult(new Intent(this,QrScanActivity.class),819);}
+ @Override protected void onActivityResult(int request,int result,Intent data){
+  super.onActivityResult(request,result,data);
+  if(request==GOOGLE_REQUEST){if(result==RESULT_OK)finishGoogleLogin(data);return;}
+  if(request==819&&result==RESULT_OK&&data!=null){
+   String qr=data.getStringExtra("qr");if(qr==null){toast("No company code scanned");return;}
+   String[] parts=qr.split(":");
+   if(parts.length==3&&"SHARACO".equals(parts[0]))join(parts[1],parts[2]);
+   else toast("Invalid company invitation");
+  }
+ }
  void join(String cid,String token){page("Request to Join Company");EditText name=input("Your name");EditText phone=input("Your company SIM number (+countrycode...)");
   button("Submit request",()->{
    String n=name.getText().toString().trim(),p=phone.getText().toString().trim();if(n.isEmpty()||!p.matches("\\+[0-9]{8,15}")){toast("Enter name and international SIM number");return;}
    Map<String,Object> m=new HashMap<>();m.put("uid",uid());m.put("name",n);m.put("sim",p);m.put("token",token);m.put("status","pending");m.put("requestedAt",FieldValue.serverTimestamp());
-   db.collection("companies").document(cid).collection("join_requests").document(uid()).set(m).addOnSuccessListener(v->{getSharedPreferences("settings",0).edit().putString("pendingCompany",cid).apply();toast("Request submitted; owner approval required");}).addOnFailureListener(e->toast(e.getMessage()));
+   db.collection("companies").document(cid).collection("join_requests").document(uid()).set(m).addOnSuccessListener(v->{getSharedPreferences("settings",0).edit().putString("pendingCompany",cid).apply();getSharedPreferences("onboarding",0).edit().putString(uid()+"_mode","team").apply();toast("Request submitted; owner approval required");teamWelcome();}).addOnFailureListener(e->toast(e.getMessage()));
   });button("Back",()->home());
  }
  void requests(){page("Pending join requests");db.collection("companies").document(company).collection("join_requests").whereEqualTo("status","pending").get().addOnSuccessListener(s->{
   for(DocumentSnapshot d:s){label(d.getString("name")+" | "+d.getString("sim"));button("Approve "+d.getString("name"),()->{
    Map<String,Object> m=new HashMap<>();m.put("uid",d.getId());m.put("role","employee");m.put("approved",true);m.put("sim",d.getString("sim"));m.put("assignedUsers",new ArrayList<String>());
    WriteBatch b=db.batch();b.set(db.collection("companies").document(company).collection("members").document(d.getId()),m);
-   b.update(d.getReference(),"status","approved");Map<String,Object> directory=new HashMap<>();directory.put("name",company);directory.put("role","employee");directory.put("status","approved");directory.put("updatedAt",FieldValue.serverTimestamp());b.commit().addOnSuccessListener(v->{db.collection("users").document(d.getId()).collection("companies").document(company).set(directory);requests();}).addOnFailureListener(e->toast(e.getMessage()));
+   b.update(d.getReference(),"status","approved");Map<String,Object> directory=new HashMap<>();directory.put("name",company);directory.put("role","employee");directory.put("status","approved");directory.put("updatedAt",FieldValue.serverTimestamp());
+   b.set(db.collection("users").document(d.getId()).collection("companies").document(company),directory);
+   b.commit().addOnSuccessListener(v->requests()).addOnFailureListener(e->toast(e.getMessage()));
   });}}).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());}
  @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==12 && checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED){if(getSharedPreferences("settings",0).getBoolean("syncConsent",false) && company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany","")))CallStore.schedule(this);toast("Permissions updated. Register this device to enable uploads.");}else if(code==12)toast("Call-log access was not granted");}
  void manageTeam(){if(!isAdmin()){toast("Access denied");return;}page("Manage Company Team");
