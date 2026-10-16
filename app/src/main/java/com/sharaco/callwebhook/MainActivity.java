@@ -153,6 +153,7 @@ public class MainActivity extends Activity {
   }
   menuItem("▦","Scan company QR","Join an authorized company as a team member",()->scanJoin());
   if(!adminMode)label("Only your assigned company information will be available. Admin and reporting options are hidden.");
+  button("Delete my account",()->confirmAccountDeletion());
   button("Sign out",()->signOutAccount());
  }
  void restoreOwnedCompany(){
@@ -320,6 +321,7 @@ public class MainActivity extends Activity {
    if("owner".equals(role)||"admin".equals(role))menuItem("♙","Team Management","QR joining, approvals and permissions",()->showSection("team"));
    if(isAdmin())menuItem("⚙","Company Configuration","Company administration and configuration",()->showSection("settings"));
    label("Signed in as "+role+"   ·   SIM "+(sim.isEmpty()?"not set":sim));
+   button("Company membership & account",()->companyMembershipOptions());
    registerDeviceAutomatically(company);
   }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
  }
@@ -363,6 +365,55 @@ public class MainActivity extends Activity {
   if(checkSelfPermission(Manifest.permission.READ_CONTACTS)!=PackageManager.PERMISSION_GRANTED)missing.add(Manifest.permission.READ_CONTACTS);
   if(missing.isEmpty()){CallStore.schedule(this);return;}
   requestPermissions(missing.toArray(new String[0]),12);
+ }
+ void companyMembershipOptions(){
+  page("Membership and Account");
+  label("Company: "+company);
+  if("owner".equals(role)){
+   label("Company owners must arrange secure deletion or ownership transfer before leaving.");
+   button("Delete company (requires backend)",()->new android.app.AlertDialog.Builder(this)
+    .setTitle("Permanent deletion requires a server operation")
+    .setMessage("Company deletion includes all call logs, assignments, devices, members and indexes. To prevent orphaned data, this action will become available after a trusted backend deletion endpoint is deployed.")
+    .setPositiveButton("OK",null).show());
+  }else button("Leave company",()->new android.app.AlertDialog.Builder(this)
+   .setTitle("Leave this company?")
+   .setMessage("Your membership will be removed. Company-owned call records remain with the company.")
+   .setNegativeButton("Cancel",null).setPositiveButton("Leave",(d,w)->leaveCompany()).show());
+  if("owner".equals(role))button("Remove team members",()->manageTeam());
+  button("Back",()->companyHome());
+ }
+ void leaveCompany(){
+  String account=uid(),cid=company;if(account==null)return;
+  WriteBatch b=db.batch();
+  b.delete(db.collection("companies").document(cid).collection("members").document(account));
+  b.delete(db.collection("users").document(account).collection("companies").document(cid));
+  b.commit().addOnSuccessListener(v->{CallStore.stop(this);toast("Membership removed");home();})
+   .addOnFailureListener(e->toast("Unable to leave: "+e.getLocalizedMessage()));
+ }
+ void confirmAccountDeletion(){
+  new android.app.AlertDialog.Builder(this).setTitle("Delete your SHARACO account?")
+   .setMessage("This removes your SHARACO login and memberships. Organization-owned call logs remain in their companies. Company owners cannot delete their account until ownership is resolved.")
+   .setNegativeButton("Cancel",null).setPositiveButton("Delete account",(d,w)->deleteAccount()).show();
+ }
+ void deleteAccount(){
+  String account=uid();if(account==null)return;
+  db.collection("users").document(account).collection("companies").get(Source.SERVER).addOnSuccessListener(list->{
+   for(DocumentSnapshot d:list)if("owner".equals(d.getString("role"))){toast("You own a company. Resolve company ownership first.");return;}
+   if(list.size()>100){toast("Contact support to delete an account with many memberships");return;}
+   WriteBatch b=db.batch();
+   for(DocumentSnapshot d:list){
+    b.delete(db.collection("companies").document(d.getId()).collection("members").document(account));
+    b.delete(d.getReference());
+   }
+   b.commit().addOnSuccessListener(v->auth.getCurrentUser().delete()
+    .addOnSuccessListener(done->{
+     CallStore.stop(this);FollowUpWorker.stop(this);
+     getSharedPreferences("settings",0).edit().clear().apply();
+     getSharedPreferences("onboarding",0).edit().remove(account+"_mode").apply();
+     deleteDatabase("call_history.db");toast("Account deleted");home();
+    }).addOnFailureListener(e->toast("Recent sign-in required. Sign out, sign in again and retry: "+e.getLocalizedMessage())))
+    .addOnFailureListener(e->toast("Membership cleanup failed: "+e.getLocalizedMessage()));
+  }).addOnFailureListener(e->toast("Account check failed: "+e.getLocalizedMessage()));
  }
  void openDevices(){Intent i=new Intent(this,DeviceActivity.class);i.putExtra("company",company);startActivity(i);}
  void openCrm(){
