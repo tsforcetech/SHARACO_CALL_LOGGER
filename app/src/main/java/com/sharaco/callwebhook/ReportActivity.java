@@ -16,7 +16,10 @@ import java.io.OutputStream;
 
 public class ReportActivity extends Activity {
  private static final int SAVE_CSV=824;
- String cid,uid;
+ String cid,uid;boolean administrator=false;
+ Long chosenStart=null,chosenEnd=null;
+ DataTable recordsTable,employeeTable;
+ final Map<String,TextView> kpis=new HashMap<>();
  FirebaseFirestore db;
  LinearLayout root;
  EditText from,to,employeeFilter;
@@ -42,15 +45,16 @@ public class ReportActivity extends Activity {
   super.onCreate(b);cid=getIntent().getStringExtra("company");uid=FirebaseAuth.getInstance().getUid();db=FirebaseFirestore.getInstance();
   if(cid==null||uid==null){finish();return;}
   db.collection("companies").document(cid).collection("members").document(uid).get().addOnSuccessListener(d->{
-   String role=d.getString("role");if(!Boolean.TRUE.equals(d.getBoolean("approved"))||(!"owner".equals(role)&&!"admin".equals(role))){toast("Company admin required");finish();return;}render();
+   String role=d.getString("role");if(!Boolean.TRUE.equals(d.getBoolean("approved"))){toast("Company membership required");finish();return;}administrator="owner".equals(role)||"admin".equals(role);render();
   }).addOnFailureListener(e->{toast(e.getLocalizedMessage());finish();});
  }
  void render(){
   ScrollView s=new ScrollView(this);root=new LinearLayout(this);UiKit.screen(this,root);s.addView(root);setContentView(s);
-  TextView title=new TextView(this);title.setText("Company Call Reports");UiKit.heading(title);title.setTextColor(Color.rgb(15,58,54));root.addView(title);
+  TextView title=new TextView(this);title.setText(administrator?"Company Call Analytics":"My Call Analytics");UiKit.heading(title);title.setTextColor(Color.rgb(15,58,54));root.addView(title);
   label("Filter calls by date (YYYY-MM-DD), then export results to CSV.");
   from=new EditText(this);from.setHint("From date · YYYY-MM-DD");root.addView(from);
   to=new EditText(this);to.setHint("To date · YYYY-MM-DD");root.addView(to);
+  if(administrator){
   employeeSummary=new TextView(this);employeeSummary.setText("All employees");UiKit.label(employeeSummary);root.addView(employeeSummary);
   button("Select Employees (one or more)",()->selectEmployees());
   db.collection("companies").document(cid).collection("members").get().addOnSuccessListener(members->{
@@ -62,17 +66,68 @@ public class ReportActivity extends Activity {
    }
    employeeChecked=new boolean[employeeIds.size()];
   }).addOnFailureListener(e->toast("Unable to load employee filters: "+e.getLocalizedMessage()));
+  }
   typeFilter=new Spinner(this);String[] types={"ALL","INCOMING","OUTGOING","MISSED","REJECTED","BLOCKED","VOICEMAIL","ANSWERED_EXTERNALLY","OTHER"};
   ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,types);typeFilter.setAdapter(adapter);root.addView(typeFilter);
   label("Call logs are recorded for every approved employee, even when no customer numbers were assigned. CRM assignments do not limit this report.");
-  label("Employee and call type filters apply to loaded pages. Load the entire date range for complete counts.");
+  label("Statistics and CSV include loaded records only. Use Load entire date range for more complete reporting.");
   button("Load company calls",()->load());
-  button("Load next 500 calls",()->loadNext());
+  button("Load next 100 calls",()->loadNext());
   button("Load entire date range",()->{if(reportQuery==null){toast("Load report first");return;}loadAllPages=true;loadNext();});
-  summary=new TextView(this);summary.setTextSize(16);summary.setTextColor(Color.rgb(15,88,80));root.addView(summary);
-  employeeBreakdown=new TextView(this);UiKit.label(employeeBreakdown);root.addView(employeeBreakdown);
+  UiKit.subtitle(this,root,"CALL PERFORMANCE");
+  metricRow("Total Calls","Incoming");
+  metricRow("Outgoing","Missed");
+  metricRow("Duration","Avg Duration");
+  summary=new TextView(this);UiKit.label(summary);summary.setText("Select a date range and load records.");root.addView(summary);
+  UiKit.subtitle(this,root,"CALL DETAILS");
+  label("Swipe horizontally for the full detail table. CSV exports the matching loaded records.");
+  recordsTable=new DataTable(this,root,
+    new String[]{"Date / Time","Employee","Phone Number","Type","Duration","SIM","Contact"},
+    new int[]{150,160,160,150,110,160,160});
+  if(administrator){
+   UiKit.subtitle(this,root,"EMPLOYEE PERFORMANCE");
+   employeeTable=new DataTable(this,root,
+    new String[]{"Employee","Calls","Incoming","Outgoing","Missed","Duration (min)"},
+    new int[]{180,100,105,105,105,140});
+  }
   button("Export filtered CSV",()->{if(rows.isEmpty()){toast("Load records before exporting");return;}Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("text/csv");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"sharaco_calls.csv");startActivityForResult(i,SAVE_CSV);});
   button("Back",()->finish());
+ }
+ void metricRow(String first,String second){
+  LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);
+  root.addView(row,new LinearLayout.LayoutParams(-1,-2));
+  addMetric(row,first);addMetric(row,second);
+ }
+ void addMetric(LinearLayout row,String name){
+  LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);
+  card.setPadding(UiKit.dp(this,14),UiKit.dp(this,15),UiKit.dp(this,14),UiKit.dp(this,15));
+  card.setBackground(UiKit.shape(this,Color.WHITE,16,UiKit.BORDER));
+  LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);
+  lp.setMargins(UiKit.dp(this,3),UiKit.dp(this,4),UiKit.dp(this,3),UiKit.dp(this,4));row.addView(card,lp);
+  TextView label=new TextView(this);label.setText(name);UiKit.label(label);card.addView(label);
+  TextView value=new TextView(this);value.setText("—");value.setTextSize(23);
+  value.setTypeface(Typeface.DEFAULT,Typeface.BOLD);value.setTextColor(UiKit.INK);card.addView(value);
+  kpis.put(name,value);
+ }
+ void metric(String key,String text){TextView cell=kpis.get(key);if(cell!=null)cell.setText(text);}
+ void updateDashboard(){
+  metric("Total Calls",String.valueOf(rows.size()));
+  metric("Incoming",String.valueOf(incoming));
+  metric("Outgoing",String.valueOf(outgoing));
+  metric("Missed",String.valueOf(missed));
+  metric("Duration",(totalDuration/60)+" min");
+  metric("Avg Duration",(rows.isEmpty()?0:totalDuration/rows.size())+" sec");
+  if(employeeTable!=null){
+   employeeTable.clearData();
+   for(Map.Entry<String,long[]> entry:perEmployee.entrySet()){
+    long[] m=entry.getValue();
+    String employee=entry.getKey();String display=employee;
+    int i=employeeIds.indexOf(employee);
+    if(i>=0 && i<employeeLabels.size())display=employeeLabels.get(i);
+    employeeTable.add(display,String.valueOf(m[0]),String.valueOf(m[2]),
+     String.valueOf(m[3]),String.valueOf(m[4]),String.valueOf(m[1]/60));
+   }
+  }
  }
  void selectEmployees(){
   if(employeeChecked==null){toast("Employee list is still loading");return;}
@@ -101,11 +156,13 @@ public class ReportActivity extends Activity {
   if((begin!=null&&begin<0)||(end!=null&&end<0)){toast("Use valid dates in YYYY-MM-DD format");return;}
   if(begin!=null&&end!=null&&begin>end){toast("From date must be before To date");return;}
   if(loading)return;
-  selectedType=typeFilter.getSelectedItem().toString();
-  loadAllPages=false;reachedEnd=false;rows.clear();fetched=0;incoming=0;outgoing=0;missed=0;rejected=0;blocked=0;voicemail=0;externallyAnswered=0;other=0;totalDuration=0;perEmployee.clear();cursor=null;
-  reportQuery=db.collection("companies").document(cid).collection("call_logs").orderBy("startedAt",Query.Direction.DESCENDING);
-  if(begin!=null)reportQuery=reportQuery.whereGreaterThanOrEqualTo("startedAt",begin);
-  if(end!=null)reportQuery=reportQuery.whereLessThan("startedAt",end+86400000L);
+  selectedType=typeFilter.getSelectedItem().toString();chosenStart=begin;chosenEnd=end;
+  loadAllPages=false;reachedEnd=false;rows.clear();fetched=0;incoming=0;outgoing=0;missed=0;rejected=0;blocked=0;voicemail=0;externallyAnswered=0;other=0;totalDuration=0;perEmployee.clear();cursor=null;recordsTable.clearData();updateDashboard();
+  if(administrator){
+   reportQuery=db.collection("companies").document(cid).collection("call_logs").orderBy("startedAt",Query.Direction.DESCENDING);
+   if(begin!=null)reportQuery=reportQuery.whereGreaterThanOrEqualTo("startedAt",begin);
+   if(end!=null)reportQuery=reportQuery.whereLessThan("startedAt",end+86400000L);
+  }else reportQuery=db.collection("companies").document(cid).collection("call_logs").whereEqualTo("uid",uid);
   summary.setText("Loading filtered calls...");
   loadNext();
  }
@@ -114,11 +171,13 @@ public class ReportActivity extends Activity {
   if(reportQuery==null){toast("Select Load company calls first");return;}
   if(reachedEnd){loadAllPages=false;toast("All records loaded");return;}
   loading=true;
-  Query q=reportQuery.limit(500);if(cursor!=null)q=q.startAfter(cursor);
+  Query q=reportQuery.limit(100);if(cursor!=null)q=q.startAfter(cursor);
   q.get().addOnSuccessListener(s->{
    loading=false;fetched+=s.size();
    for(DocumentSnapshot d:s){
     Long at=d.getLong("startedAt");if(at==null)continue;
+    if(chosenStart!=null&&at<chosenStart)continue;
+    if(chosenEnd!=null&&at>=chosenEnd+86400000L)continue;
     String type=d.getString("type");
     if(!allEmployees && !selectedEmployees.contains(d.getString("uid")))continue;
     if(!"ALL".equals(selectedType) && !selectedType.equals(type))continue;
@@ -128,13 +187,14 @@ public class ReportActivity extends Activity {
     long[] metric=perEmployee.computeIfAbsent(employee,k->new long[5]);metric[0]++;metric[1]+=seconds;
     if("INCOMING".equals(type))metric[2]++;else if("OUTGOING".equals(type))metric[3]++;else if("MISSED".equals(type))metric[4]++;
     rows.add(new String[]{d.getString("uid"),d.getString("sim"),d.getString("remoteNumber"),type,String.valueOf(at),String.valueOf(seconds),d.getString("contactName")});
+    recordsTable.add(new SimpleDateFormat("dd MMM yyyy HH:mm",Locale.getDefault()).format(new Date(at)),
+     administrator?employee: "Me",d.getString("remoteNumber"),type,seconds+" sec",d.getString("sim"),d.getString("contactName"));
    }
    if(!s.isEmpty())cursor=s.getDocuments().get(s.size()-1);
-   reachedEnd=s.size()<500;
-   summary.setText("Matching calls: "+rows.size()+" | Incoming: "+incoming+" | Outgoing: "+outgoing+" | Missed: "+missed+" | Rejected: "+rejected+" | Blocked: "+blocked+" | Voicemail: "+voicemail+" | Answered elsewhere: "+externallyAnswered+" | Other: "+other+" | Total duration: "+(totalDuration/60)+" minutes | Average: "+(rows.isEmpty()?0:totalDuration/rows.size())+" sec"+(s.size()<500?" | End of records":" | More pages available"));
-   StringBuilder breakdown=new StringBuilder("EMPLOYEE PERFORMANCE (LOADED CALLS)\\n");
-   for(Map.Entry<String,long[]> person:perEmployee.entrySet()){long[] m=person.getValue();breakdown.append(person.getKey()).append(" · Calls ").append(m[0]).append(" · Incoming ").append(m[2]).append(" · Outgoing ").append(m[3]).append(" · Missed ").append(m[4]).append(" · Minutes ").append(m[1]/60).append("\\n");}
-   employeeBreakdown.setText(breakdown.toString());
+   reachedEnd=s.size()<100;
+   updateDashboard();
+   summary.setText("Showing "+rows.size()+" matching calls from "+fetched+" scanned records. "
+     +(reachedEnd?"End of available records.":"More records available; use Load next 100."));
    if(loadAllPages && !reachedEnd){loadNext();}else if(loadAllPages){loadAllPages=false;toast("All available matching calls loaded");}
   }).addOnFailureListener(e->{loading=false;loadAllPages=false;toast("Report error: "+e.getLocalizedMessage());});
  }
