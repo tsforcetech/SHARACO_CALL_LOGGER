@@ -83,7 +83,7 @@ public class CrmActivity extends Activity {
   page(filter==null?"All Assigned Leads":("Leads · "+filter.replace('_',' ')));
   DataTable table=new DataTable(this,content,new String[]{"Customer","Phone","CRM Status","Assigned To","Actions"},new int[]{150,150,135,155,220});
   Query q=leads();if(!manager())q=q.whereEqualTo("assignedTo",uid);
-  q.limit(300).get().addOnSuccessListener(s=>{
+  q.limit(300).get().addOnSuccessListener(s->{
    int shown=0;
    for(DocumentSnapshot d:s){
     String status=d.getString("status");if(filter!=null&&!filter.equals(status))continue;
