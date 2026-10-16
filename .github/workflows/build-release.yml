@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v3.6.0 admin and employee tabular reporting, customer tables
+# Release v3.6.0 corrected CRM lambda and tabular reporting
 on:
   workflow_dispatch:
   push:
