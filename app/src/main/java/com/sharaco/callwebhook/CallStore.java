@@ -27,7 +27,6 @@ public class CallStore extends SQLiteOpenHelper {
   if(c.checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)return;
   if(company==null||company.isEmpty()||sim==null||sim.isEmpty())return;
   String uid=FirebaseAuth.getInstance().getUid();if(uid==null)return;
-  if(!safeSingleSim(c))return;
   long consentStart=c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L);
   if(consentStart<=0L)return;
   String[] cols={CallLog.Calls._ID,CallLog.Calls.NUMBER,CallLog.Calls.TYPE,CallLog.Calls.DATE,CallLog.Calls.DURATION};
@@ -168,7 +167,7 @@ public class CallStore extends SQLiteOpenHelper {
       if(!device.exists() || !"active".equals(device.getString("status")) || !FirebaseAuth.getInstance().getUid().equals(device.getString("uid")))return pause(state,"Registered device is inactive or unavailable");
     }else return pause(state,"Register this device before syncing");
    }catch(Exception e){state.edit().putString("status","Verification failed; retry queued").apply();return Result.retry();}
-   if(!CallStore.safeSingleSim(c))return pause(state,"Only verified single-SIM phones can sync");
+   if(c.checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)return pause(state,"Grant Android call-log access to synchronize");
    CallStore s=new CallStore(c);s.scan(c,cid,sim);
    long consent=c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L);
    int initial=s.eligiblePending(cid,sim,consent);
