@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v3.5.0 call history diagnostics
+# Release v3.6.0 admin and employee tabular reporting, customer tables
 on:
   workflow_dispatch:
   push:
