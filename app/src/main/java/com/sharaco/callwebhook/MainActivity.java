@@ -518,13 +518,22 @@ public class MainActivity extends Activity {
    b.set(db.collection("users").document(d.getId()).collection("companies").document(company),directory);
    b.commit().addOnSuccessListener(v->requests()).addOnFailureListener(e->toast(e.getMessage()));
   });}}).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());}
- @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==12 && checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED){if(getSharedPreferences("settings",0).getBoolean("syncConsent",false) && company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany","")))CallStore.schedule(this);toast("Permissions updated. Register this device to enable uploads.");}else if(code==12)toast("Call-log access was not granted");}
+ @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==12 && checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.READ_PHONE_STATE)==PackageManager.PERMISSION_GRANTED){if(getSharedPreferences("settings",0).getBoolean("syncConsent",false) && company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany","")))CallStore.schedule(this);toast("Permissions updated. Register this device to enable uploads.");}else if(code==12)toast("Call-log access was not granted");}
  void manageTeam(){if(!isAdmin()){toast("Access denied");return;}page("Manage Company Team");
   db.collection("companies").document(company).collection("members").get().addOnSuccessListener(s->{
    for(DocumentSnapshot d:s){String id=d.getId();label(id+" | "+d.getString("role")+" | "+d.getString("sim"));
     if("owner".equals(role)&&!id.equals(uid())){
      button("Promote to admin: "+id.substring(0,Math.min(8,id.length())),()->d.getReference().update("role","admin").addOnSuccessListener(v->manageTeam()).addOnFailureListener(e->toast(e.getMessage())));
      button("Set employee role: "+id.substring(0,Math.min(8,id.length())),()->d.getReference().update("role","employee").addOnSuccessListener(v->manageTeam()).addOnFailureListener(e->toast(e.getMessage())));
+     button("Remove member: "+id.substring(0,Math.min(8,id.length())),()->new android.app.AlertDialog.Builder(this)
+      .setTitle("Remove team member?")
+      .setMessage("Remove this employee from the company and revoke their company access. Existing company call history remains.")
+      .setNegativeButton("Cancel",null).setPositiveButton("Remove",(dialog,which)->{
+       WriteBatch batch=db.batch();
+       batch.delete(d.getReference());
+       batch.delete(db.collection("users").document(id).collection("companies").document(company));
+       batch.commit().addOnSuccessListener(v->manageTeam()).addOnFailureListener(e->toast("Unable to remove member: "+e.getLocalizedMessage()));
+      }).show());
      boolean approved=Boolean.TRUE.equals(d.getBoolean("approved"));
      button((approved?"Deactivate: ":"Reactivate: ")+id.substring(0,Math.min(8,id.length())),()->new android.app.AlertDialog.Builder(this).setTitle(approved?"Deactivate team member?":"Reactivate team member?")
       .setMessage(approved?"This stops the member from opening the workspace and syncing new calls after their next access check.":"Restore this member's access?")
