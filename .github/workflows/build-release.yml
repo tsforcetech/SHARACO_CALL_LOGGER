@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v3.1.0 company onboarding wizard and embedded QR scanner
+# Release v3.1.1 company directory migration, onboarding and embedded QR
 on:
   workflow_dispatch:
   push:
