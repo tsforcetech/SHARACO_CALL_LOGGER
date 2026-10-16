@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v2.7.0 follow-up notification and consistent visual styles
+# Release v2.8.0 opt-in company-scoped reminder reliability
 on:
   workflow_dispatch:
   push:
