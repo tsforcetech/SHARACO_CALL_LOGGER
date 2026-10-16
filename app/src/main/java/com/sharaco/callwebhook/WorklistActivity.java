@@ -80,19 +80,21 @@ public class WorklistActivity extends Activity {
  }
  void pendingList(){
   page("Pending Customer Calls");
+  label("Tap Call to open the SIM dialer, or Details to update the customer.");
+  DataTable table=new DataTable(this,layout,
+   new String[]{"Customer","Phone Number","CRM Status","Call / Details"},new int[]{175,155,135,220});
   numbers().whereEqualTo("assignedTo",uid).limit(300).get().addOnSuccessListener(result->{
    int count=0;
    for(DocumentSnapshot d:result){
     String status=d.getString("status");
     if(!"pending".equals(status)&&!"interested".equals(status)&&!"follow_up".equals(status))continue;
-    count++;
     String number=d.getString("phone");if(number==null)continue;
-    label((d.getString("name")==null?"Customer":d.getString("name"))+" · "+number+" · "+status);
-    btn("Call "+number,()->dial(number));
-    btn("Open customer",()->detail(d.getId(),true));
+    count++;
+    table.addActions(new String[]{d.getString("name"),number,status},
+     "Call",()->dial(number),"Details",()->detail(d.getId(),true));
    }
-   if(count==0)label("No pending calls in the first 300 assigned customers.");
-   else label("Pending contacts: "+count+" (first 300 assignments)");
+   label("Pending customers displayed: "+count+" of up to 300 assignments.");
+   if(count==0)label("No pending customers in this page.");
   }).addOnFailureListener(e->msg("Cannot load pending calls: "+e.getLocalizedMessage()));
   btn("Back",()->showHome());
  }
@@ -100,17 +102,38 @@ public class WorklistActivity extends Activity {
   if(number==null||!number.matches("\\+[0-9]{8,15}")){msg("Invalid phone number");return;}
   startActivity(new Intent(Intent.ACTION_DIAL,Uri.parse("tel:"+number)));
  }
- void myList(){page("My Numbers");numbers().whereEqualTo("assignedTo",uid).limit(300).get().addOnSuccessListener(s->{
- int done=0;for(DocumentSnapshot d:s)if("contacted".equals(d.getString("status")))done++;label("Assigned: "+s.size()+" | Contacted: "+done+" | Pending: "+(s.size()-done));
- for(DocumentSnapshot d:s)oneNumber(d,true);
- }).addOnFailureListener(e->msg(e.getMessage()));btn("Back",()->showHome());}
- void allList(){page("Company Assignments");numbers().limit(300).get().addOnSuccessListener(s->{
- int done=0;for(DocumentSnapshot d:s)if("contacted".equals(d.getString("status")))done++;label("Total: "+s.size()+" | Contacted: "+done+" | Pending: "+(s.size()-done));
- for(DocumentSnapshot d:s)oneNumber(d,false);
- }).addOnFailureListener(e->msg(e.getMessage()));btn("Back",()->showHome());}
- void oneNumber(DocumentSnapshot d,boolean employee){label((d.getString("name")==null?"":d.getString("name")+" | ")+d.getString("phone")+" | "+d.getString("status"));if(!employee)label("Assigned UID: "+d.getString("assignedTo"));
- if(employee && d.getString("phone")!=null)btn("Call "+d.getString("phone"),()->dial(d.getString("phone")));
- btn("View number",()->detail(d.getId(),employee));}
+ void myList(){
+  page("My Assigned Customers");
+  DataTable table=assignmentTable();
+  numbers().whereEqualTo("assignedTo",uid).limit(300).get().addOnSuccessListener(result->{
+   int contacted=0;for(DocumentSnapshot d:result)if("contacted".equals(d.getString("status")))contacted++;
+   label("Assigned: "+result.size()+" · Contacted: "+contacted+" · Other statuses: "+(result.size()-contacted));
+   for(DocumentSnapshot d:result)assignmentRow(table,d,true);
+  }).addOnFailureListener(e->msg(e.getLocalizedMessage()));
+  btn("Back",()->showHome());
+ }
+ void allList(){
+  page("Company Customer Assignments");
+  DataTable table=assignmentTable();
+  numbers().limit(300).get().addOnSuccessListener(result->{
+   int contacted=0;for(DocumentSnapshot d:result)if("contacted".equals(d.getString("status")))contacted++;
+   label("Showing "+result.size()+" assignments · Contacted "+contacted+" · Other "+(result.size()-contacted));
+   for(DocumentSnapshot d:result)assignmentRow(table,d,false);
+  }).addOnFailureListener(e->msg(e.getLocalizedMessage()));
+  btn("Back",()->showHome());
+ }
+ DataTable assignmentTable(){
+  label("Scroll horizontally to see all columns and actions. Display limited to 300 records.");
+  return new DataTable(this,layout,
+   new String[]{"Customer","Phone Number","Status","Assigned Employee","Actions"},
+   new int[]{155,150,120,170,220});
+ }
+ void assignmentRow(DataTable table,DocumentSnapshot d,boolean own){
+  String number=d.getString("phone");
+  table.addActions(new String[]{d.getString("name"),number,d.getString("status"),d.getString("assignedTo")},
+   number==null?null:"Call",number==null?null:()->dial(number),
+   "Details",()->detail(d.getId(),own));
+ }
  void detail(String id,boolean employee){numbers().document(id).get().addOnSuccessListener(d->{if(!d.exists()){msg("Not found");return;}page("Number Detail");label("Name: "+d.getString("name"));label("Number: "+d.getString("phone"));label("Status: "+d.getString("status"));label("Notes: "+d.getString("notes"));
  btn("Call with normal SIM dialer",()->{Intent i=new Intent(Intent.ACTION_DIAL,Uri.parse("tel:"+d.getString("phone")));startActivity(i);});
  if(uid.equals(d.getString("assignedTo"))){EditText outcome=edit("Call outcome / remarks");btn("Mark Contacted",()->{Map<String,Object> changes=new HashMap<>();changes.put("status","contacted");changes.put("contactedBy",uid);changes.put("contactedAt",FieldValue.serverTimestamp());changes.put("outcome",outcome.getText().toString().trim());changes.put("updatedAt",FieldValue.serverTimestamp());d.getReference().update(changes).addOnSuccessListener(v->detail(id,employee)).addOnFailureListener(e->msg(e.getMessage()));});}
