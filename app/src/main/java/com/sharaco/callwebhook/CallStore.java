@@ -19,7 +19,8 @@ import java.util.concurrent.TimeUnit;
 import com.google.android.gms.tasks.Tasks;
 
 public class CallStore extends SQLiteOpenHelper {
- public CallStore(Context c){super(c,"call_history.db",null,1);}
+ private final Context context;
+ public CallStore(Context c){super(c,"call_history.db",null,1);context=c.getApplicationContext();}
  @Override public void onCreate(SQLiteDatabase d){d.execSQL("CREATE TABLE calls(id TEXT PRIMARY KEY,company TEXT,uid TEXT,sim TEXT,remote TEXT,contact TEXT,calltype TEXT,startms INTEGER,duration INTEGER,uploaded INTEGER DEFAULT 0)");}
  @Override public void onUpgrade(SQLiteDatabase d,int o,int n){}
  public synchronized void scan(Context c,String company,String sim){
@@ -82,6 +83,7 @@ public class CallStore extends SQLiteOpenHelper {
    return x.moveToFirst()?x.getInt(0):0;
   }
  }
+ private String getContextDeviceId(){return context.getSharedPreferences("device_install",0).getString("deviceId","");}
  public synchronized boolean uploadBlocking(String companyId,String registeredSim,long consentStartedAt){
   String current=FirebaseAuth.getInstance().getUid();if(current==null)return false;
   boolean success=true;
@@ -96,6 +98,9 @@ public class CallStore extends SQLiteOpenHelper {
     m.put("toNumber",type.equals("OUTGOING")?remote:sim);m.put("contactName",contact==null?"":contact);
     m.put("type",type);m.put("startedAt",start);m.put("durationSec",dur);
     m.put("createdAt",com.google.firebase.firestore.FieldValue.serverTimestamp());m.put("deviceCallId",id);
+    String registeredDevice=getContextDeviceId();
+    if(registeredDevice.isEmpty()){success=false;break;}
+    m.put("deviceId",registeredDevice);
     try{
       com.google.firebase.firestore.DocumentReference remoteDoc=FirebaseFirestore.getInstance()
        .collection("companies").document(cid).collection("call_logs").document(id);
