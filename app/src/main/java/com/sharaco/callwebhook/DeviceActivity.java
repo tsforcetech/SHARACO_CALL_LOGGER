@@ -32,14 +32,19 @@ public class DeviceActivity extends Activity {
  void register(){
   DocumentReference ref=devices().document(uid+"_"+deviceId);
   ref.get().addOnSuccessListener(old->{
-   if(old.exists() && !"active".equals(old.getString("status"))){
-    message("This device has been disabled by an administrator. Contact your company owner.");return;
+   if(old.exists()){
+    if("active".equals(old.getString("status"))){
+     message("This device is already registered and active.");
+     android.content.SharedPreferences settings=getSharedPreferences("settings",0);
+     if(settings.getBoolean("syncConsent",false) && cid.equals(settings.getString("syncConsentCompany","")))CallStore.schedule(this);
+    }else message("This device has been disabled by an administrator. Contact your company owner.");
+    return;
    }
    Map<String,Object> data=new HashMap<>();
    data.put("uid",uid);data.put("model",Build.MANUFACTURER+" "+Build.MODEL);
    data.put("androidVersion",Build.VERSION.RELEASE);
    data.put("lastSeen",FieldValue.serverTimestamp());data.put("status","active");
-   ref.set(data,SetOptions.merge()).addOnSuccessListener(v->{
+   ref.set(data).addOnSuccessListener(v->{
     message("Device registered. Automatic sync requires call permissions and company consent.");
     android.content.SharedPreferences sp=getSharedPreferences("settings",0);
     if(sp.getBoolean("syncConsent",false) && cid.equals(sp.getString("syncConsentCompany","")))CallStore.schedule(this);
