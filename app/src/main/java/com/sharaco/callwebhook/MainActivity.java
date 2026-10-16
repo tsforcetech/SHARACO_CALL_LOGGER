@@ -33,7 +33,7 @@ public class MainActivity extends Activity {
  String section="";
  static final int GOOGLE_REQUEST=712;
  boolean signingIn=false;
- boolean syncPromptShown=false;
+ String promptedCompany="";
  int teal=UiKit.BRAND;
  int ink=UiKit.INK;
  GradientDrawable rounded(int color,int r){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(r);return d;}
@@ -195,7 +195,7 @@ public class MainActivity extends Activity {
    }).addOnFailureListener(e->toast("Approval check failed: "+e.getLocalizedMessage()));
  }
  void signOutAccount(){
-  CallStore.stop(this);FollowUpWorker.stop(this);auth.signOut();company="";syncPromptShown=false;
+  CallStore.stop(this);FollowUpWorker.stop(this);auth.signOut();company="";promptedCompany="";
   getSharedPreferences("settings",0).edit().clear().apply();home();
  }
  void login(){
@@ -347,8 +347,8 @@ public class MainActivity extends Activity {
   }).addOnFailureListener(e->toast("Unable to check device registration: "+e.getLocalizedMessage()));
  }
  void maybeAskSyncConsent(String cid){
-  if(syncPromptShown||!cid.equals(company))return;
-  syncPromptShown=true;
+  if(cid.equals(promptedCompany)||!cid.equals(company))return;
+  promptedCompany=cid;
   android.content.SharedPreferences prefs=getSharedPreferences("settings",0);
   boolean allowed=prefs.getBoolean("syncConsent",false)&&cid.equals(prefs.getString("syncConsentCompany",""));
   if(allowed){askMissingPermissions();return;}
