@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v3.1.1 company directory migration, onboarding and embedded QR
+# Release v3.1.1 complete onboarding including existing company recovery
 on:
   workflow_dispatch:
   push:
