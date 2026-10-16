@@ -210,6 +210,10 @@ public class MainActivity extends Activity {
   label("Successfully uploaded: "+store.countSynced(company));
   long last=CallStore.lastSync(this);
   label("Last background sync: "+(last==0?"Not yet completed":new java.util.Date(last).toString()));
+  android.content.SharedPreferences status=getSharedPreferences("sync_diagnostics",0);
+  label("Worker status: "+status.getString("status","Never run"));
+  long attempted=status.getLong("lastAttempt",0);
+  label("Last attempted: "+(attempted==0?"Not yet":new java.util.Date(attempted).toString()));
   boolean permission=checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED;
   label("Android call-log permission: "+(permission?"Granted":"Not granted"));
   label("My SIM: "+(sim.isEmpty()?"Not registered":sim));
@@ -218,7 +222,8 @@ public class MainActivity extends Activity {
   label("Android schedules periodic work approximately every 15 minutes. Battery optimization, connectivity, sign-in and device policies can delay sync.");
   button("Register or Check Device",()->openDevices());
   label("Automatic upload consent: "+(getSharedPreferences("settings",0).getBoolean("syncConsent",false)?"Enabled":"Disabled"));
-  button("Queue upload now",()->{if(!getSharedPreferences("settings",0).getBoolean("syncConsent",false)){toast("Enable sync consent first");return;}CallStore.schedule(this);toast("Sync queued");});
+  button("Queue upload now",()->{if(!getSharedPreferences("settings",0).getBoolean("syncConsent",false)||!company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany",""))){toast("Enable consent for this company first");return;}CallStore.syncNow(this);toast("Upload requested; check Worker status after a short delay");});
+  button("Refresh sync status",()->syncHealth());
  }
  void companyOverview(){
   if(!isAdmin()){toast("Admin access required");return;}
@@ -245,7 +250,7 @@ public class MainActivity extends Activity {
   label("Accuracy safeguard: call uploads are paused on dual-SIM and unverifiable devices until SIM-specific attribution is supported.");
   boolean enabled=getSharedPreferences("settings",0).getBoolean("syncConsent",false) && company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany",""));
   label("Current setting: "+(enabled?"Enabled":"Disabled"));
-  button("Enable Automatic Sync",()->{getSharedPreferences("settings",0).edit().putBoolean("syncConsent",true).putString("syncConsentCompany",company).putLong("syncConsentStartedAt",System.currentTimeMillis()).apply();if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_CONTACTS},12);else CallStore.schedule(this);toast("Automatic sync enabled");syncPrivacy();});
+  button("Enable Automatic Sync",()->{getSharedPreferences("settings",0).edit().putBoolean("syncConsent",true).putString("syncConsentCompany",company).putLong("syncConsentStartedAt",System.currentTimeMillis()).apply();if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED || checkSelfPermission(Manifest.permission.READ_PHONE_STATE)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_PHONE_STATE},12);else CallStore.schedule(this);toast("Automatic sync enabled");syncPrivacy();});
   button("Pause Automatic Sync",()->{getSharedPreferences("settings",0).edit().putBoolean("syncConsent",false).remove("syncConsentCompany").apply();CallStore.stop(this);toast("Background sync paused");syncPrivacy();});
  }
  void ownSim(){
