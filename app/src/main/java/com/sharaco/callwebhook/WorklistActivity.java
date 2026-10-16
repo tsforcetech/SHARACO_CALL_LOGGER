@@ -30,16 +30,16 @@ public class WorklistActivity extends Activity {
  }).addOnFailureListener(e->finish());}
  void page(String title){
   worklistHome=title.equals("Assigned Number Worklist");
-  layout=new LinearLayout(this);layout.setOrientation(1);layout.setPadding(24,24,24,32);layout.setBackgroundColor(Color.rgb(247,250,250));
+  layout=new LinearLayout(this);UiKit.screen(this,layout);
   ScrollView sc=new ScrollView(this);sc.setFillViewport(true);sc.addView(layout);setContentView(sc);
   if(!worklistHome)btn("‹  Back",()->onBackPressed());
   TextView heading=new TextView(this);heading.setText(title);heading.setTextSize(23);heading.setTextColor(Color.rgb(16,48,48));heading.setTypeface(null,Typeface.BOLD);heading.setPadding(4,16,4,18);layout.addView(heading);
 }
- void label(String v){TextView t=new TextView(this);t.setText(v);t.setTextSize(17);t.setPadding(0,12,0,8);layout.addView(t);}
+ void label(String v){UiKit.cardText(this,layout,v,null);}
  EditText edit(String v){EditText t=new EditText(this);t.setHint(v);layout.addView(t);return t;}
  void btn(String v,Runnable action){
  Button b=new Button(this);b.setText(v);b.setAllCaps(false);b.setTextSize(15);b.setTextColor(v.startsWith("‹")?Color.rgb(21,83,77):Color.WHITE);
- GradientDrawable bg=new GradientDrawable();bg.setColor(v.startsWith("‹")?Color.rgb(231,246,242):Color.rgb(0,171,143));bg.setCornerRadius(28);b.setBackground(bg);
+ GradientDrawable bg=new GradientDrawable();UiKit.action(this,b,v.startsWith("‹"));
  LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,6,0,8);layout.addView(b,lp);b.setOnClickListener(x->action.run());
 }
  void msg(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
