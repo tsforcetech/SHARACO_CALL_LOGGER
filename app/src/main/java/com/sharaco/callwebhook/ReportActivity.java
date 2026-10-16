@@ -34,7 +34,7 @@ public class ReportActivity extends Activity {
  DocumentSnapshot cursor;
  TextView summary,employeeBreakdown;
  Map<String,long[]> perEmployee=new TreeMap<>();
- int rejected=0,blocked=0,other=0;
+ int rejected=0,blocked=0,voicemail=0,externallyAnswered=0,other=0;
  void label(String message){UiKit.cardText(this,root,message,null);}
  void button(String title,Runnable task){Button b=new Button(this);b.setText(title);b.setAllCaps(false);b.setTextColor(Color.WHITE);GradientDrawable d=new GradientDrawable();d.setColor(UiKit.BRAND);d.setCornerRadius(28);b.setBackground(d);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,8,0,8);root.addView(b,lp);b.setOnClickListener(v->task.run());}
  void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
@@ -62,7 +62,7 @@ public class ReportActivity extends Activity {
    }
    employeeChecked=new boolean[employeeIds.size()];
   }).addOnFailureListener(e->toast("Unable to load employee filters: "+e.getLocalizedMessage()));
-  typeFilter=new Spinner(this);String[] types={"ALL","INCOMING","OUTGOING","MISSED","REJECTED","BLOCKED","OTHER"};
+  typeFilter=new Spinner(this);String[] types={"ALL","INCOMING","OUTGOING","MISSED","REJECTED","BLOCKED","VOICEMAIL","ANSWERED_EXTERNALLY","OTHER"};
   ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,types);typeFilter.setAdapter(adapter);root.addView(typeFilter);
   label("Call logs are recorded for every approved employee, even when no customer numbers were assigned. CRM assignments do not limit this report.");
   label("Employee and call type filters apply to loaded pages. Load the entire date range for complete counts.");
@@ -102,7 +102,7 @@ public class ReportActivity extends Activity {
   if(begin!=null&&end!=null&&begin>end){toast("From date must be before To date");return;}
   if(loading)return;
   selectedType=typeFilter.getSelectedItem().toString();
-  loadAllPages=false;reachedEnd=false;rows.clear();fetched=0;incoming=0;outgoing=0;missed=0;rejected=0;blocked=0;other=0;totalDuration=0;perEmployee.clear();cursor=null;
+  loadAllPages=false;reachedEnd=false;rows.clear();fetched=0;incoming=0;outgoing=0;missed=0;rejected=0;blocked=0;voicemail=0;externallyAnswered=0;other=0;totalDuration=0;perEmployee.clear();cursor=null;
   reportQuery=db.collection("companies").document(cid).collection("call_logs").orderBy("startedAt",Query.Direction.DESCENDING);
   if(begin!=null)reportQuery=reportQuery.whereGreaterThanOrEqualTo("startedAt",begin);
   if(end!=null)reportQuery=reportQuery.whereLessThan("startedAt",end+86400000L);
@@ -122,7 +122,7 @@ public class ReportActivity extends Activity {
     String type=d.getString("type");
     if(!allEmployees && !selectedEmployees.contains(d.getString("uid")))continue;
     if(!"ALL".equals(selectedType) && !selectedType.equals(type))continue;
-    if("INCOMING".equals(type))incoming++;else if("OUTGOING".equals(type))outgoing++;else if("MISSED".equals(type))missed++;else if("REJECTED".equals(type))rejected++;else if("BLOCKED".equals(type))blocked++;else other++;
+    if("INCOMING".equals(type))incoming++;else if("OUTGOING".equals(type))outgoing++;else if("MISSED".equals(type))missed++;else if("REJECTED".equals(type))rejected++;else if("BLOCKED".equals(type))blocked++;else if("VOICEMAIL".equals(type))voicemail++;else if("ANSWERED_EXTERNALLY".equals(type))externallyAnswered++;else other++;
     Long duration=d.getLong("durationSec");long seconds=duration==null?0:duration;totalDuration+=seconds;
     String employee=d.getString("uid");if(employee==null)employee="Unknown";
     long[] metric=perEmployee.computeIfAbsent(employee,k->new long[5]);metric[0]++;metric[1]+=seconds;
@@ -131,7 +131,7 @@ public class ReportActivity extends Activity {
    }
    if(!s.isEmpty())cursor=s.getDocuments().get(s.size()-1);
    reachedEnd=s.size()<500;
-   summary.setText("Matching calls: "+rows.size()+" | Incoming: "+incoming+" | Outgoing: "+outgoing+" | Missed: "+missed+" | Rejected: "+rejected+" | Blocked: "+blocked+" | Other: "+other+" | Total duration: "+(totalDuration/60)+" minutes | Average: "+(rows.isEmpty()?0:totalDuration/rows.size())+" sec"+(s.size()<500?" | End of records":" | More pages available"));
+   summary.setText("Matching calls: "+rows.size()+" | Incoming: "+incoming+" | Outgoing: "+outgoing+" | Missed: "+missed+" | Rejected: "+rejected+" | Blocked: "+blocked+" | Voicemail: "+voicemail+" | Answered elsewhere: "+externallyAnswered+" | Other: "+other+" | Total duration: "+(totalDuration/60)+" minutes | Average: "+(rows.isEmpty()?0:totalDuration/rows.size())+" sec"+(s.size()<500?" | End of records":" | More pages available"));
    StringBuilder breakdown=new StringBuilder("EMPLOYEE PERFORMANCE (LOADED CALLS)\\n");
    for(Map.Entry<String,long[]> person:perEmployee.entrySet()){long[] m=person.getValue();breakdown.append(person.getKey()).append(" · Calls ").append(m[0]).append(" · Incoming ").append(m[2]).append(" · Outgoing ").append(m[3]).append(" · Missed ").append(m[4]).append(" · Minutes ").append(m[1]/60).append("\\n");}
    employeeBreakdown.setText(breakdown.toString());
