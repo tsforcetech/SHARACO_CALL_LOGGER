@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v3.2.0 company-specific consent prompts and account controls
+# Release v3.2.0 multi-workspace role check and automatic device enrollment
 on:
   workflow_dispatch:
   push:
