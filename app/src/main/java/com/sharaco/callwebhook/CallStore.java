@@ -85,6 +85,23 @@ public class CallStore extends SQLiteOpenHelper {
    while(x.moveToNext())a.add((x.getString(1).isEmpty()?x.getString(0):x.getString(1)+" ("+x.getString(0)+")")+" | "+x.getString(2)+" | "+x.getLong(3)+"s | "+new java.util.Date(x.getLong(4))+" | "+(x.getInt(5)==1?"SYNCED":"PENDING"));
   }return a;
  }
+ public synchronized ArrayList<String[]> historyRows(String company){
+  ArrayList<String[]> rows=new ArrayList<>();
+  String user=FirebaseAuth.getInstance().getUid();if(user==null)return rows;
+  try(Cursor x=getReadableDatabase().rawQuery(
+   "SELECT remote,contact,calltype,duration,startms,uploaded FROM calls WHERE company=? AND uid=? ORDER BY startms DESC LIMIT 300",
+   new String[]{company,user})){
+   java.text.SimpleDateFormat date=new java.text.SimpleDateFormat("dd MMM yyyy HH:mm",java.util.Locale.getDefault());
+   while(x.moveToNext()){
+    String remote=x.getString(0),contact=x.getString(1);
+    rows.add(new String[]{date.format(new java.util.Date(x.getLong(4))),
+     contact==null||contact.isEmpty()?"—":contact,
+     remote==null?"—":remote,x.getString(2),
+     String.valueOf(x.getLong(3))+" sec",x.getInt(5)==1?"Synced":"Pending"});
+   }
+  }
+  return rows;
+ }
  public synchronized int countPending(String cid){
   int result=0;try(Cursor x=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM calls WHERE company=? AND uid=? AND uploaded=0",new String[]{cid,FirebaseAuth.getInstance().getUid()==null?"":FirebaseAuth.getInstance().getUid()})){if(x.moveToFirst())result=x.getInt(0);}return result;
  }
