@@ -46,7 +46,7 @@ public class WorklistActivity extends Activity {
  CollectionReference numbers(){return db.collection("companies").document(company).collection("assigned_numbers");}
  boolean manager(){return "owner".equals(role)||"admin".equals(role);}
  @Override public void onBackPressed(){if(worklistHome)finish();else showHome();}
- void showHome(){page("Assigned Number Worklist");btn("My assigned numbers",()->myList());
+ void showHome(){page("Assigned Number Worklist");btn("Pending calls · tap to dial",()->pendingList());btn("My assigned numbers",()->myList());
  if(manager()){btn("Add / import numbers",()->addScreen());btn("All assignments and progress",()->allList());}
  btn("Back",()->finish());}
  void loadMembers(Runnable after){memberIds.clear();memberLabels.clear();
@@ -78,6 +78,28 @@ public class WorklistActivity extends Activity {
  String[] row=csvRows.get(index);Map<String,Object> m=new HashMap<>();m.put("phone",row[0]);m.put("name",row[1]);m.put("notes",row[2]);m.put("assignedTo",to);m.put("status","pending");m.put("createdBy",uid);m.put("createdAt",FieldValue.serverTimestamp());m.put("updatedAt",FieldValue.serverTimestamp());numbers().add(m).addOnSuccessListener(d->{added++;importRows(to,index+1);}).addOnFailureListener(e->{failed++;importRows(to,index+1);});
  // Failed writes remain visible as errors and are not automatically retried.
  }
+ void pendingList(){
+  page("Pending Customer Calls");
+  numbers().whereEqualTo("assignedTo",uid).limit(300).get().addOnSuccessListener(result->{
+   int count=0;
+   for(DocumentSnapshot d:result){
+    String status=d.getString("status");
+    if(!"pending".equals(status)&&!"interested".equals(status)&&!"follow_up".equals(status))continue;
+    count++;
+    String number=d.getString("phone");if(number==null)continue;
+    label((d.getString("name")==null?"Customer":d.getString("name"))+" · "+number+" · "+status);
+    btn("Call "+number,()->dial(number));
+    btn("Open customer",()->detail(d.getId(),true));
+   }
+   if(count==0)label("No pending calls in the first 300 assigned customers.");
+   else label("Pending contacts: "+count+" (first 300 assignments)");
+  }).addOnFailureListener(e->msg("Cannot load pending calls: "+e.getLocalizedMessage()));
+  btn("Back",()->showHome());
+ }
+ void dial(String number){
+  if(number==null||!number.matches("\\+[0-9]{8,15}")){msg("Invalid phone number");return;}
+  startActivity(new Intent(Intent.ACTION_DIAL,Uri.parse("tel:"+number)));
+ }
  void myList(){page("My Numbers");numbers().whereEqualTo("assignedTo",uid).limit(300).get().addOnSuccessListener(s->{
  int done=0;for(DocumentSnapshot d:s)if("contacted".equals(d.getString("status")))done++;label("Assigned: "+s.size()+" | Contacted: "+done+" | Pending: "+(s.size()-done));
  for(DocumentSnapshot d:s)oneNumber(d,true);
@@ -87,6 +109,7 @@ public class WorklistActivity extends Activity {
  for(DocumentSnapshot d:s)oneNumber(d,false);
  }).addOnFailureListener(e->msg(e.getMessage()));btn("Back",()->showHome());}
  void oneNumber(DocumentSnapshot d,boolean employee){label((d.getString("name")==null?"":d.getString("name")+" | ")+d.getString("phone")+" | "+d.getString("status"));if(!employee)label("Assigned UID: "+d.getString("assignedTo"));
+ if(employee && d.getString("phone")!=null)btn("Call "+d.getString("phone"),()->dial(d.getString("phone")));
  btn("View number",()->detail(d.getId(),employee));}
  void detail(String id,boolean employee){numbers().document(id).get().addOnSuccessListener(d->{if(!d.exists()){msg("Not found");return;}page("Number Detail");label("Name: "+d.getString("name"));label("Number: "+d.getString("phone"));label("Status: "+d.getString("status"));label("Notes: "+d.getString("notes"));
  btn("Call with normal SIM dialer",()->{Intent i=new Intent(Intent.ACTION_DIAL,Uri.parse("tel:"+d.getString("phone")));startActivity(i);});
