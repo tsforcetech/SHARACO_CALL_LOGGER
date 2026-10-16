@@ -320,6 +320,7 @@ public class MainActivity extends Activity {
    menuItem("☏","Calls & Follow-ups","History, leads, automatic sync",()->showSection("calls"));
    menuItem("◷","Pending Customer Calls","Open my customer calling list and dial",()->{Intent i=new Intent(this,WorklistActivity.class);i.putExtra("company",company);i.putExtra("showPending",true);startActivity(i);});
    menuItem("☁","Synced Calls","See my uploaded call history",()->syncedHistory());
+   menuItem("▥","My Call Report","My call statistics, filters and call records",()->{Intent i=new Intent(this,ReportActivity.class);i.putExtra("company",company);startActivity(i);});
    if(isAdmin())menuItem("▥","Reports & Insights","Company-wide call performance and activity",()->showSection("reports"));
    if(isAdmin())menuItem("▣","Company Overview","Employees, assigned numbers and sync activity",()->companyOverview());
    if("owner".equals(role)||"admin".equals(role))menuItem("♙","Team Management","QR joining, approvals and permissions",()->showSection("team"));
@@ -596,7 +597,18 @@ public class MainActivity extends Activity {
    }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
   }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
  }
- void localHistory(){page("Local SIM Call History");for(String row:store.history(company))label(row);button("Back",()->home());}
+ void localHistory(){
+  page("Local Call History");
+  label("Phone calls recorded locally for this company. Swipe the table horizontally to see all fields.");
+  DataTable table=new DataTable(this,panel,
+   new String[]{"Date / Time","Contact","Phone Number","Call Type","Duration","Upload Status"},
+   new int[]{145,145,155,135,100,115});
+  ArrayList<String[]> rows=store.historyRows(company);
+  label("Showing "+rows.size()+" most recent local calls (maximum 300).");
+  for(String[] row:rows)table.add(row);
+  if(rows.isEmpty())label("No local calls found. Check the Sync Status screen for the last scan result.");
+  button("Back",()->showSection("calls"));
+ }
  void syncedHistory(){
   page("My Synced Call History");
   label("These are your own call records stored in the current company, independent of CRM assignments.");
@@ -614,12 +626,15 @@ public class MainActivity extends Activity {
     }
     label("Recent calls: "+docs.size()+" · Incoming "+incoming+" · Outgoing "+outgoing+" · Missed "+missed+" · Duration "+duration/60+" mins");
     if(docs.isEmpty())label("No synced calls yet. Verify call-sync health or wait for the background worker.");
+    DataTable table=new DataTable(this,panel,
+     new String[]{"Date / Time","Contact","Phone Number","Call Type","Duration","Company SIM"},
+     new int[]{145,145,155,145,100,155});
+    java.text.SimpleDateFormat fmt=new java.text.SimpleDateFormat("dd MMM yyyy HH:mm",java.util.Locale.getDefault());
     for(DocumentSnapshot d:docs){
      Long stamp=d.getLong("startedAt");Long seconds=d.getLong("durationSec");
-     label((d.getString("contactName")==null?"":d.getString("contactName")+" · ")+
-      d.getString("remoteNumber")+"\n"+d.getString("type")+" · "+
-      (stamp==null?"Unknown time":new java.util.Date(stamp).toString())+" · "+
-      (seconds==null?0:seconds)+" sec");
+     table.add(stamp==null?"—":fmt.format(new java.util.Date(stamp)),
+      d.getString("contactName"),d.getString("remoteNumber"),d.getString("type"),
+      (seconds==null?0:seconds)+" sec",d.getString("sim"));
     }
   }).addOnFailureListener(e->toast("Cannot fetch synced calls: "+e.getLocalizedMessage()));
   button("Back",()->showSection("calls"));
