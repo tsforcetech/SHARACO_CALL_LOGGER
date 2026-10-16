@@ -97,15 +97,15 @@ public class CallStore extends SQLiteOpenHelper {
     m.put("type",type);m.put("startedAt",start);m.put("durationSec",dur);
     m.put("createdAt",com.google.firebase.firestore.FieldValue.serverTimestamp());m.put("deviceCallId",id);
     try{
-      com.google.firebase.firestore.DocumentReference remote=FirebaseFirestore.getInstance()
+      com.google.firebase.firestore.DocumentReference remoteDoc=FirebaseFirestore.getInstance()
        .collection("companies").document(cid).collection("call_logs").document(id);
-      DocumentSnapshot existing=Tasks.await(remote.get(com.google.firebase.firestore.Source.SERVER),30,TimeUnit.SECONDS);
+      DocumentSnapshot existing=Tasks.await(remoteDoc.get(com.google.firebase.firestore.Source.SERVER),30,TimeUnit.SECONDS);
       if(existing.exists()){
        if(!owner.equals(existing.getString("uid")) || !cid.equals(existing.getString("companyId"))){
         success=false;break;
        }
       }else{
-       Tasks.await(remote.set(m),30,TimeUnit.SECONDS);
+       Tasks.await(remoteDoc.set(m),30,TimeUnit.SECONDS);
       }
       ContentValues done=new ContentValues();done.put("uploaded",1);
       getWritableDatabase().update("calls",done,"id=?",new String[]{id});
