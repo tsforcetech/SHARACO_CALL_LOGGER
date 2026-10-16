@@ -147,11 +147,11 @@ public class CallStore extends SQLiteOpenHelper {
    if(!c.getSharedPreferences("settings",0).getBoolean("syncConsent",false) || !cid.equals(c.getSharedPreferences("settings",0).getString("syncConsentCompany","")))return pause(state,"Consent not enabled for this company");
    if(c.getSharedPreferences("settings",0).getLong("syncConsentStartedAt",0L)<=0L)return pause(state,"Consent start time missing");
    try{
-    DocumentSnapshot member=Tasks.await(FirebaseFirestore.getInstance().collection("companies").document(cid).collection("members").document(FirebaseAuth.getInstance().getUid()).get(),30,TimeUnit.SECONDS);
+    DocumentSnapshot member=Tasks.await(FirebaseFirestore.getInstance().collection("companies").document(cid).collection("members").document(FirebaseAuth.getInstance().getUid()).get(com.google.firebase.firestore.Source.SERVER),30,TimeUnit.SECONDS);
     if(!Boolean.TRUE.equals(member.getBoolean("approved")) || !sim.equals(member.getString("sim")))return pause(state,"Company membership or SIM not verified");
     String deviceId=c.getSharedPreferences("device_install",0).getString("deviceId","");
     if(!deviceId.isEmpty()){
-      DocumentSnapshot device=Tasks.await(FirebaseFirestore.getInstance().collection("companies").document(cid).collection("devices").document(FirebaseAuth.getInstance().getUid()+"_"+deviceId).get(),30,TimeUnit.SECONDS);
+      DocumentSnapshot device=Tasks.await(FirebaseFirestore.getInstance().collection("companies").document(cid).collection("devices").document(FirebaseAuth.getInstance().getUid()+"_"+deviceId).get(com.google.firebase.firestore.Source.SERVER),30,TimeUnit.SECONDS);
       if(!device.exists() || !"active".equals(device.getString("status")) || !FirebaseAuth.getInstance().getUid().equals(device.getString("uid")))return pause(state,"Registered device is inactive or unavailable");
     }else return pause(state,"Register this device before syncing");
    }catch(Exception e){state.edit().putString("status","Verification failed; retry queued").apply();return Result.retry();}
