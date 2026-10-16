@@ -21,7 +21,8 @@ public class ReportActivity extends Activity {
  LinearLayout root;
  EditText from,to,employeeFilter;
  Spinner typeFilter;
- String selectedEmployee="",selectedType="ALL";
+ Set<String> selectedEmployees=new HashSet<>();boolean allEmployees=true;String selectedType="ALL";
+ ArrayList<String> employeeIds=new ArrayList<>(),employeeLabels=new ArrayList<>();boolean[] employeeChecked;TextView employeeSummary;
  ArrayList<String[]> rows=new ArrayList<>();
  boolean loading=false;
  boolean loadAllPages=false;
@@ -48,7 +49,17 @@ public class ReportActivity extends Activity {
   label("Filter calls by date (YYYY-MM-DD), then export results to CSV.");
   from=new EditText(this);from.setHint("From date · YYYY-MM-DD");root.addView(from);
   to=new EditText(this);to.setHint("To date · YYYY-MM-DD");root.addView(to);
-  employeeFilter=new EditText(this);employeeFilter.setSingleLine(true);employeeFilter.setHint("Employee UID · optional");root.addView(employeeFilter);
+  employeeSummary=new TextView(this);employeeSummary.setText("All employees");UiKit.label(employeeSummary);root.addView(employeeSummary);
+  button("Select Employees (one or more)",()->selectEmployees());
+  db.collection("companies").document(cid).collection("members").get().addOnSuccessListener(members->{
+   employeeIds.clear();employeeLabels.clear();
+   for(DocumentSnapshot member:members)if(Boolean.TRUE.equals(member.getBoolean("approved"))){
+    employeeIds.add(member.getId());
+    String sim=member.getString("sim");
+    employeeLabels.add((sim==null||sim.isEmpty()?"Employee":sim)+" · "+member.getId().substring(0,Math.min(8,member.getId().length())));
+   }
+   employeeChecked=new boolean[employeeIds.size()];
+  }).addOnFailureListener(e->toast("Unable to load employee filters: "+e.getLocalizedMessage()));
   typeFilter=new Spinner(this);String[] types={"ALL","INCOMING","OUTGOING","MISSED","REJECTED","BLOCKED","OTHER"};
   ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,types);typeFilter.setAdapter(adapter);root.addView(typeFilter);
   label("Employee and call type filters apply to every loaded page. For complete counts, use Load entire date range.");
@@ -58,6 +69,23 @@ public class ReportActivity extends Activity {
   summary=new TextView(this);summary.setTextSize(16);summary.setTextColor(Color.rgb(15,88,80));root.addView(summary);
   button("Export filtered CSV",()->{if(rows.isEmpty()){toast("Load records before exporting");return;}Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("text/csv");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"sharaco_calls.csv");startActivityForResult(i,SAVE_CSV);});
   button("Back",()->finish());
+ }
+ void selectEmployees(){
+  if(employeeChecked==null){toast("Employee list is still loading");return;}
+  String[] names=employeeLabels.toArray(new String[0]);
+  boolean[] draft=employeeChecked.clone();
+  new android.app.AlertDialog.Builder(this).setTitle("Choose employees")
+   .setMultiChoiceItems(names,draft,(dialog,which,checked)->draft[which]=checked)
+   .setNeutralButton("All employees",(dialog,which)->{
+    allEmployees=true;selectedEmployees.clear();employeeChecked=new boolean[employeeIds.size()];
+    employeeSummary.setText("All employees");reportQuery=null;
+   }).setNegativeButton("Cancel",null).setPositiveButton("Apply",(dialog,which)->{
+    HashSet<String> choice=new HashSet<>();
+    for(int i=0;i<draft.length;i++)if(draft[i])choice.add(employeeIds.get(i));
+    if(choice.isEmpty()){toast("Choose one or more employees, or use All employees");return;}
+    allEmployees=false;selectedEmployees=choice;employeeChecked=draft;
+    employeeSummary.setText(choice.size()+" employee(s) selected");reportQuery=null;
+   }).show();
  }
  Long dateMs(String s){
   if(s.isEmpty())return null;
@@ -69,7 +97,7 @@ public class ReportActivity extends Activity {
   if((begin!=null&&begin<0)||(end!=null&&end<0)){toast("Use valid dates in YYYY-MM-DD format");return;}
   if(begin!=null&&end!=null&&begin>end){toast("From date must be before To date");return;}
   if(loading)return;
-  selectedEmployee=employeeFilter.getText().toString().trim();selectedType=typeFilter.getSelectedItem().toString();
+  selectedType=typeFilter.getSelectedItem().toString();
   loadAllPages=false;reachedEnd=false;rows.clear();fetched=0;incoming=0;outgoing=0;missed=0;totalDuration=0;cursor=null;
   reportQuery=db.collection("companies").document(cid).collection("call_logs").orderBy("startedAt",Query.Direction.DESCENDING);
   if(begin!=null)reportQuery=reportQuery.whereGreaterThanOrEqualTo("startedAt",begin);
@@ -88,7 +116,7 @@ public class ReportActivity extends Activity {
    for(DocumentSnapshot d:s){
     Long at=d.getLong("startedAt");if(at==null)continue;
     String type=d.getString("type");
-    if(!selectedEmployee.isEmpty() && !selectedEmployee.equals(d.getString("uid")))continue;
+    if(!allEmployees && !selectedEmployees.contains(d.getString("uid")))continue;
     if(!"ALL".equals(selectedType) && !selectedType.equals(type))continue;
     if("INCOMING".equals(type))incoming++;if("OUTGOING".equals(type))outgoing++;if("MISSED".equals(type))missed++;
     Long duration=d.getLong("durationSec");long seconds=duration==null?0:duration;totalDuration+=seconds;
