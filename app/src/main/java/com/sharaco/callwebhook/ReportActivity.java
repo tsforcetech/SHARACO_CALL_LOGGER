@@ -32,8 +32,8 @@ public class ReportActivity extends Activity {
  Query reportQuery;
  DocumentSnapshot cursor;
  TextView summary;
- void label(String message){TextView t=new TextView(this);t.setText(message);t.setTextColor(Color.rgb(45,69,72));t.setTextSize(16);t.setPadding(0,14,0,9);root.addView(t);}
- void button(String title,Runnable task){Button b=new Button(this);b.setText(title);b.setAllCaps(false);b.setTextColor(Color.WHITE);GradientDrawable d=new GradientDrawable();d.setColor(Color.rgb(0,171,143));d.setCornerRadius(28);b.setBackground(d);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,8,0,8);root.addView(b,lp);b.setOnClickListener(v->task.run());}
+ void label(String message){UiKit.cardText(this,root,message,null);}
+ void button(String title,Runnable task){Button b=new Button(this);b.setText(title);b.setAllCaps(false);b.setTextColor(Color.WHITE);GradientDrawable d=new GradientDrawable();d.setColor(UiKit.BRAND);d.setCornerRadius(28);b.setBackground(d);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,8,0,8);root.addView(b,lp);b.setOnClickListener(v->task.run());}
  void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
  @Override public void onCreate(Bundle b){
   super.onCreate(b);cid=getIntent().getStringExtra("company");uid=FirebaseAuth.getInstance().getUid();db=FirebaseFirestore.getInstance();
@@ -43,8 +43,8 @@ public class ReportActivity extends Activity {
   }).addOnFailureListener(e->{toast(e.getLocalizedMessage());finish();});
  }
  void render(){
-  ScrollView s=new ScrollView(this);root=new LinearLayout(this);root.setOrientation(1);root.setPadding(24,32,24,32);root.setBackgroundColor(Color.rgb(247,250,250));s.addView(root);setContentView(s);
-  TextView title=new TextView(this);title.setText("Company Call Reports");title.setTextSize(25);title.setTypeface(null,Typeface.BOLD);title.setTextColor(Color.rgb(15,58,54));root.addView(title);
+  ScrollView s=new ScrollView(this);root=new LinearLayout(this);UiKit.screen(this,root);s.addView(root);setContentView(s);
+  TextView title=new TextView(this);title.setText("Company Call Reports");UiKit.heading(title);title.setTextColor(Color.rgb(15,58,54));root.addView(title);
   label("Filter calls by date (YYYY-MM-DD), then export results to CSV.");
   from=new EditText(this);from.setHint("From date · YYYY-MM-DD");root.addView(from);
   to=new EditText(this);to.setHint("To date · YYYY-MM-DD");root.addView(to);
