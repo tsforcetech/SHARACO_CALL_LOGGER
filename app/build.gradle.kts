@@ -9,8 +9,8 @@ android {
         applicationId = "com.sharaco.callwebhook"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "3.1.1"
+        versionCode = 27
+        versionName = "3.2.0"
     }
     val signingFile = System.getenv("SIGNING_KEYSTORE_PATH")
     if (!signingFile.isNullOrBlank()) {
@@ -38,6 +38,7 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-functions")
     implementation("com.google.android.gms:play-services-auth:21.3.0")
     implementation("androidx.work:work-runtime:2.10.0")
     implementation("androidx.core:core:1.15.0")
