@@ -19,6 +19,7 @@ public class CrmActivity extends Activity {
  FirebaseFirestore db;
  String company,uid,role;
  LinearLayout content;
+ final Set<String> selectedAgents=new HashSet<>();boolean filterAgents=false;
  boolean manager(){return "owner".equals(role)||"admin".equals(role);}
  GradientDrawable bg(int color){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(30);return d;}
  void page(String title){
@@ -43,6 +44,7 @@ public class CrmActivity extends Activity {
  }
  void home(){
   page("Lead Follow-ups");
+  if(manager())button("Filter Employees (one or more)",()->selectAgents());
   button("All statuses",()->list(null));
   button("Pending",()->list("pending"));
   button("Interested",()->list("interested"));
@@ -55,6 +57,28 @@ public class CrmActivity extends Activity {
   button("Lost",()->list("lost"));
   button("Return to company",()->finish());
  }
+ void selectAgents(){
+  if(!manager())return;
+  db.collection("companies").document(company).collection("members").get().addOnSuccessListener(members->{
+   ArrayList<String> ids=new ArrayList<>(),labels=new ArrayList<>();
+   for(DocumentSnapshot d:members)if(Boolean.TRUE.equals(d.getBoolean("approved"))){
+    ids.add(d.getId());String phone=d.getString("sim");
+    labels.add((phone==null||phone.isEmpty()?"Employee":phone)+" · "+d.getId().substring(0,Math.min(8,d.getId().length())));
+   }
+   boolean[] checks=new boolean[ids.size()];
+   for(int i=0;i<ids.size();i++)checks[i]=filterAgents&&selectedAgents.contains(ids.get(i));
+   new android.app.AlertDialog.Builder(this).setTitle("Choose team members")
+    .setMultiChoiceItems(labels.toArray(new String[0]),checks,(dialog,index,checked)->checks[index]=checked)
+    .setNeutralButton("All employees",(dialog,which)->{filterAgents=false;selectedAgents.clear();home();})
+    .setNegativeButton("Cancel",null)
+    .setPositiveButton("Apply",(dialog,which)->{
+     HashSet<String> selection=new HashSet<>();for(int i=0;i<ids.size();i++)if(checks[i])selection.add(ids.get(i));
+     if(selection.isEmpty()){toast("Select one or more employees or All employees");return;}
+     selectedAgents.clear();selectedAgents.addAll(selection);filterAgents=true;home();
+     label(selectedAgents.size()+" selected employees");
+    }).show();
+  }).addOnFailureListener(e->toast("Unable to load employees: "+e.getLocalizedMessage()));
+ }
  void list(String filter){
   page(filter==null?"All Assigned Leads":("Leads · "+filter.replace('_',' ')));
   Query q=leads();if(!manager())q=q.whereEqualTo("assignedTo",uid);
@@ -62,6 +86,7 @@ public class CrmActivity extends Activity {
    int shown=0;
    for(DocumentSnapshot d:s){
     String status=d.getString("status");if(filter!=null&&!filter.equals(status))continue;
+    if(manager()&&filterAgents&&!selectedAgents.contains(d.getString("assignedTo")))continue;
     shown++;
     String person=d.getString("name"),phone=d.getString("phone");
     label((person==null||person.isEmpty()?"Contact":person)+"  •  "+phone+"\n"+(status==null?"pending":status)+"  ·  "+(d.getString("assignedTo")==null?"":d.getString("assignedTo")));
@@ -80,6 +105,7 @@ public class CrmActivity extends Activity {
    for(DocumentSnapshot d:s){
     String when=d.getString("nextFollowUp"),status=d.getString("status");
     if(when==null||when.isEmpty()||when.compareTo(now)>0||"won".equals(status)||"lost".equals(status))continue;
+    if(manager()&&filterAgents&&!selectedAgents.contains(d.getString("assignedTo")))continue;
     count++;label((d.getString("name")==null?"Contact":d.getString("name"))+" · "+d.getString("phone")+"\nDue: "+when);
     button("Open follow-up",()->details(d.getId()));
    }
