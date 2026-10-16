@@ -146,10 +146,32 @@ public class MainActivity extends Activity {
   String pending=getSharedPreferences("settings",0).getString("pendingCompany","");
   if(!pending.isEmpty())menuItem("◷","Approval status","Check whether your company owner approved your request",()->checkPending(pending));
   sectionTitle(adminMode?"ADMIN TOOLS":"TEAM MEMBER");
-  if(adminMode)menuItem("＋","Create another company","Open the guided company creation wizard",()->createCompany());
+  if(adminMode){
+   menuItem("＋","Create another company","Open the guided company creation wizard",()->createCompany());
+   menuItem("↻","Restore an existing company","Recover a company you already own if it is missing from the list",()->restoreOwnedCompany());
+  }
   menuItem("▦","Scan company QR","Join an authorized company as a team member",()->scanJoin());
   if(!adminMode)label("Only your assigned company information will be available. Admin and reporting options are hidden.");
   button("Sign out",()->signOutAccount());
+ }
+ void restoreOwnedCompany(){
+  page("Restore Existing Company");
+  label("Use this only for a company you created previously and that is missing from your company list.");
+  label("Copy its Firestore document ID from Firebase Console > companies.");
+  EditText id=input("Existing company document ID");
+  button("Verify and Restore",()->{
+   String cid=id.getText().toString().trim();
+   if(cid.isEmpty()||cid.contains("/")){id.setError("Enter a valid company document ID");return;}
+   db.collection("companies").document(cid).get(Source.SERVER).addOnSuccessListener(doc->{
+    if(!doc.exists()||!uid().equals(doc.getString("ownerUid"))){toast("Company not found or this account is not the owner");return;}
+    Map<String,Object> index=new HashMap<>();index.put("name",doc.getString("name"));
+    index.put("role","owner");index.put("status","approved");index.put("updatedAt",FieldValue.serverTimestamp());
+    db.collection("users").document(uid()).collection("companies").document(cid).set(index)
+     .addOnSuccessListener(v->{toast("Company restored");home();})
+     .addOnFailureListener(e->toast("Unable to restore company: "+e.getLocalizedMessage()));
+   }).addOnFailureListener(e->toast("Company lookup failed: "+e.getLocalizedMessage()));
+  });
+  button("Cancel",()->home());
  }
  void teamWelcome(){
   page("Join as Team Member");
