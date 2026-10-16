@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v3.2.0 multi-workspace role check and automatic device enrollment
+# Release v3.3.0 standalone call reports and employee history/worklists
 on:
   workflow_dispatch:
   push:
