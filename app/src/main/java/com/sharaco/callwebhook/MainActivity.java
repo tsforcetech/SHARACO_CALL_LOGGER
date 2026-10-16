@@ -76,7 +76,7 @@ public class MainActivity extends Activity {
 
 
     menuItem("◉","Lead Follow-ups","Update lead status and next actions",()->openCrm());
-    menuItem("↻","Sync Now","Queue call history upload to Firebase",()->{if(!getSharedPreferences("settings",0).getBoolean("syncConsent",false) || !company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany",""))){syncPrivacy();return;}CallStore.schedule(this);toast("Background sync queued");});
+
 
   }else if(type.equals("team")){
     sectionTitle("Team administration");
@@ -139,6 +139,7 @@ public class MainActivity extends Activity {
    getSharedPreferences("onboarding",0).edit().putString(uid()+"_mode","team").apply();
    teamWelcome();
   });
+  button("Delete my account",()->confirmAccountDeletion());
   button("Sign out",()->signOutAccount());
  }
  void showWorkspaceHome(boolean adminMode){
@@ -194,7 +195,7 @@ public class MainActivity extends Activity {
    }).addOnFailureListener(e->toast("Approval check failed: "+e.getLocalizedMessage()));
  }
  void signOutAccount(){
-  CallStore.stop(this);FollowUpWorker.stop(this);auth.signOut();company="";
+  CallStore.stop(this);FollowUpWorker.stop(this);auth.signOut();company="";syncPromptShown=false;
   getSharedPreferences("settings",0).edit().clear().apply();home();
  }
  void login(){
@@ -409,6 +410,11 @@ public class MainActivity extends Activity {
  }
  void deleteAccount(){
   String account=uid();if(account==null)return;
+  com.google.firebase.auth.FirebaseUser signedIn=auth.getCurrentUser();
+  long lastSignIn=signedIn==null||signedIn.getMetadata()==null?0:signedIn.getMetadata().getLastSignInTimestamp();
+  if(lastSignIn<=0||System.currentTimeMillis()-lastSignIn>180000L){
+   toast("For your security, sign out and sign in again, then delete the account within 3 minutes.");return;
+  }
   db.collection("users").document(account).collection("companies").get(Source.SERVER).addOnSuccessListener(list->{
    for(DocumentSnapshot d:list)if("owner".equals(d.getString("role"))){toast("You own a company. Resolve company ownership first.");return;}
    if(list.size()>100){toast("Contact support to delete an account with many memberships");return;}
