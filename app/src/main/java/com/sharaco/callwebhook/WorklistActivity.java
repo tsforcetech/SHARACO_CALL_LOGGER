@@ -26,7 +26,7 @@ public class WorklistActivity extends Activity {
  private int added=0,failed=0; private boolean worklistHome=true;
  @Override public void onCreate(Bundle b){super.onCreate(b);db=FirebaseFirestore.getInstance();uid=FirebaseAuth.getInstance().getUid();company=getIntent().getStringExtra("company");if(uid==null||company==null){finish();return;}
  db.collection("companies").document(company).collection("members").document(uid).get().addOnSuccessListener(d->{
- if(!Boolean.TRUE.equals(d.getBoolean("approved"))){finish();return;}role=d.getString("role");showHome();
+ if(!Boolean.TRUE.equals(d.getBoolean("approved"))){finish();return;}role=d.getString("role");if(getIntent().getBooleanExtra("showPending",false))pendingList();else showHome();
  }).addOnFailureListener(e->finish());}
  void page(String title){
   worklistHome=title.equals("Assigned Number Worklist");
