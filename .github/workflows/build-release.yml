@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v2.9.0 corrected durable sync diagnostics
+# Release v2.10.0 bounded automatic sync and queued-call retries
 on:
   workflow_dispatch:
   push:
