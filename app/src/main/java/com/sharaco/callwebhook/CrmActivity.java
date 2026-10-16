@@ -81,16 +81,17 @@ public class CrmActivity extends Activity {
  }
  void list(String filter){
   page(filter==null?"All Assigned Leads":("Leads · "+filter.replace('_',' ')));
+  DataTable table=new DataTable(this,content,new String[]{"Customer","Phone","CRM Status","Assigned To","Actions"},new int[]{150,150,135,155,220});
   Query q=leads();if(!manager())q=q.whereEqualTo("assignedTo",uid);
-  q.limit(300).get().addOnSuccessListener(s->{
+  q.limit(300).get().addOnSuccessListener(s=>{
    int shown=0;
    for(DocumentSnapshot d:s){
     String status=d.getString("status");if(filter!=null&&!filter.equals(status))continue;
     if(manager()&&filterAgents&&!selectedAgents.contains(d.getString("assignedTo")))continue;
     shown++;
     String person=d.getString("name"),phone=d.getString("phone");
-    label((person==null||person.isEmpty()?"Contact":person)+"  •  "+phone+"\n"+(status==null?"pending":status)+"  ·  "+(d.getString("assignedTo")==null?"":d.getString("assignedTo")));
-    button("Open lead",()->details(d.getId()));
+    table.addActions(new String[]{person,phone,status,d.getString("assignedTo")},
+     "Call",()->dialContact(phone),"Details",()->details(d.getId()));
    }
    if(shown==0)label("No leads in this category");
   }).addOnFailureListener(e->toast("Unable to load leads: "+e.getLocalizedMessage()));
@@ -98,6 +99,7 @@ public class CrmActivity extends Activity {
  }
  void dueList(){
   page("Due Follow-ups");
+  DataTable table=new DataTable(this,content,new String[]{"Customer","Phone","Status","Follow-up Due","Actions"},new int[]{150,150,130,175,220});
   Query q=leads();if(!manager())q=q.whereEqualTo("assignedTo",uid);
   q.limit(300).get().addOnSuccessListener(s->{
    String now=new SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US).format(new Date());
@@ -106,12 +108,18 @@ public class CrmActivity extends Activity {
     String when=d.getString("nextFollowUp"),status=d.getString("status");
     if(when==null||when.isEmpty()||when.compareTo(now)>0||"won".equals(status)||"lost".equals(status))continue;
     if(manager()&&filterAgents&&!selectedAgents.contains(d.getString("assignedTo")))continue;
-    count++;label((d.getString("name")==null?"Contact":d.getString("name"))+" · "+d.getString("phone")+"\nDue: "+when);
-    button("Open follow-up",()->details(d.getId()));
+    count++;
+    String number=d.getString("phone");
+    table.addActions(new String[]{d.getString("name"),number,status,when},
+     "Call",()->dialContact(number),"Details",()->details(d.getId()));
    }
    if(count==0)label("No currently due follow-ups in the first 300 assigned leads.");
   }).addOnFailureListener(e->toast("Unable to load due follow-ups: "+e.getLocalizedMessage()));
   button("Back",()->home());
+ }
+ void dialContact(String number){
+  if(number==null||!number.matches("\\+[0-9]{8,15}")){toast("Invalid phone number");return;}
+  startActivity(new android.content.Intent(android.content.Intent.ACTION_DIAL,android.net.Uri.parse("tel:"+number)));
  }
  void details(String id){
   leads().document(id).get().addOnSuccessListener(d->{
