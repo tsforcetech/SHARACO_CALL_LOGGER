@@ -371,10 +371,22 @@ public class MainActivity extends Activity {
   label("Company: "+company);
   if("owner".equals(role)){
    label("Company owners must arrange secure deletion or ownership transfer before leaving.");
-   button("Delete company (requires backend)",()->new android.app.AlertDialog.Builder(this)
-    .setTitle("Permanent deletion requires a server operation")
-    .setMessage("Company deletion includes all call logs, assignments, devices, members and indexes. To prevent orphaned data, this action will become available after a trusted backend deletion endpoint is deployed.")
-    .setPositiveButton("OK",null).show());
+   button("Permanently delete company",()->{
+    EditText confirmation=new EditText(this);
+    confirmation.setHint("Enter company ID: "+company);
+    new android.app.AlertDialog.Builder(this).setTitle("Permanently delete company?")
+     .setMessage("This permanently deletes company calls, assignments, members and devices. All staff lose access. This cannot be undone. Enter the company ID to confirm.")
+     .setView(confirmation).setNegativeButton("Cancel",null)
+     .setPositiveButton("Delete",(dialog,which)->{
+      String cid=company;
+      if(!cid.equals(confirmation.getText().toString().trim())){toast("Company ID does not match. Nothing was deleted.");return;}
+      Map<String,Object> input=new HashMap<>();input.put("companyId",cid);input.put("confirm",cid);
+      com.google.firebase.functions.FirebaseFunctions.getInstance("us-central1").getHttpsCallable("deleteCompany")
+       .call(input).addOnSuccessListener(done->{
+        CallStore.stop(this);toast("Company permanently deleted");home();
+       }).addOnFailureListener(e->toast("Deletion failed. Deploy and verify the secure deleteCompany function: "+e.getLocalizedMessage()));
+     }).show();
+   });
   }else button("Leave company",()->new android.app.AlertDialog.Builder(this)
    .setTitle("Leave this company?")
    .setMessage("Your membership will be removed. Company-owned call records remain with the company.")
