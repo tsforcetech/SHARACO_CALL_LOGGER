@@ -32,7 +32,9 @@ public class ReportActivity extends Activity {
  long totalDuration=0;
  Query reportQuery;
  DocumentSnapshot cursor;
- TextView summary;
+ TextView summary,employeeBreakdown;
+ Map<String,long[]> perEmployee=new TreeMap<>();
+ int rejected=0,blocked=0,other=0;
  void label(String message){UiKit.cardText(this,root,message,null);}
  void button(String title,Runnable task){Button b=new Button(this);b.setText(title);b.setAllCaps(false);b.setTextColor(Color.WHITE);GradientDrawable d=new GradientDrawable();d.setColor(UiKit.BRAND);d.setCornerRadius(28);b.setBackground(d);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,8,0,8);root.addView(b,lp);b.setOnClickListener(v->task.run());}
  void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
@@ -62,11 +64,13 @@ public class ReportActivity extends Activity {
   }).addOnFailureListener(e->toast("Unable to load employee filters: "+e.getLocalizedMessage()));
   typeFilter=new Spinner(this);String[] types={"ALL","INCOMING","OUTGOING","MISSED","REJECTED","BLOCKED","OTHER"};
   ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,types);typeFilter.setAdapter(adapter);root.addView(typeFilter);
-  label("Employee and call type filters apply to every loaded page. For complete counts, use Load entire date range.");
+  label("Call logs are recorded for every approved employee, even when no customer numbers were assigned. CRM assignments do not limit this report.");
+  label("Employee and call type filters apply to loaded pages. Load the entire date range for complete counts.");
   button("Load company calls",()->load());
   button("Load next 500 calls",()->loadNext());
   button("Load entire date range",()->{if(reportQuery==null){toast("Load report first");return;}loadAllPages=true;loadNext();});
   summary=new TextView(this);summary.setTextSize(16);summary.setTextColor(Color.rgb(15,88,80));root.addView(summary);
+  employeeBreakdown=new TextView(this);UiKit.label(employeeBreakdown);root.addView(employeeBreakdown);
   button("Export filtered CSV",()->{if(rows.isEmpty()){toast("Load records before exporting");return;}Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("text/csv");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"sharaco_calls.csv");startActivityForResult(i,SAVE_CSV);});
   button("Back",()->finish());
  }
@@ -98,7 +102,7 @@ public class ReportActivity extends Activity {
   if(begin!=null&&end!=null&&begin>end){toast("From date must be before To date");return;}
   if(loading)return;
   selectedType=typeFilter.getSelectedItem().toString();
-  loadAllPages=false;reachedEnd=false;rows.clear();fetched=0;incoming=0;outgoing=0;missed=0;totalDuration=0;cursor=null;
+  loadAllPages=false;reachedEnd=false;rows.clear();fetched=0;incoming=0;outgoing=0;missed=0;rejected=0;blocked=0;other=0;totalDuration=0;perEmployee.clear();cursor=null;
   reportQuery=db.collection("companies").document(cid).collection("call_logs").orderBy("startedAt",Query.Direction.DESCENDING);
   if(begin!=null)reportQuery=reportQuery.whereGreaterThanOrEqualTo("startedAt",begin);
   if(end!=null)reportQuery=reportQuery.whereLessThan("startedAt",end+86400000L);
@@ -118,13 +122,19 @@ public class ReportActivity extends Activity {
     String type=d.getString("type");
     if(!allEmployees && !selectedEmployees.contains(d.getString("uid")))continue;
     if(!"ALL".equals(selectedType) && !selectedType.equals(type))continue;
-    if("INCOMING".equals(type))incoming++;if("OUTGOING".equals(type))outgoing++;if("MISSED".equals(type))missed++;
+    if("INCOMING".equals(type))incoming++;else if("OUTGOING".equals(type))outgoing++;else if("MISSED".equals(type))missed++;else if("REJECTED".equals(type))rejected++;else if("BLOCKED".equals(type))blocked++;else other++;
     Long duration=d.getLong("durationSec");long seconds=duration==null?0:duration;totalDuration+=seconds;
+    String employee=d.getString("uid");if(employee==null)employee="Unknown";
+    long[] metric=perEmployee.computeIfAbsent(employee,k->new long[5]);metric[0]++;metric[1]+=seconds;
+    if("INCOMING".equals(type))metric[2]++;else if("OUTGOING".equals(type))metric[3]++;else if("MISSED".equals(type))metric[4]++;
     rows.add(new String[]{d.getString("uid"),d.getString("sim"),d.getString("remoteNumber"),type,String.valueOf(at),String.valueOf(seconds),d.getString("contactName")});
    }
    if(!s.isEmpty())cursor=s.getDocuments().get(s.size()-1);
    reachedEnd=s.size()<500;
-   summary.setText("Matching: "+rows.size()+" calls | Incoming "+incoming+" | Outgoing "+outgoing+" | Missed "+missed+" | Duration "+(totalDuration/60)+" minutes"+(s.size()<500?" | End of records":" | More pages available"));
+   summary.setText("Matching calls: "+rows.size()+" | Incoming: "+incoming+" | Outgoing: "+outgoing+" | Missed: "+missed+" | Rejected: "+rejected+" | Blocked: "+blocked+" | Other: "+other+" | Total duration: "+(totalDuration/60)+" minutes | Average: "+(rows.isEmpty()?0:totalDuration/rows.size())+" sec"+(s.size()<500?" | End of records":" | More pages available"));
+   StringBuilder breakdown=new StringBuilder("EMPLOYEE PERFORMANCE (LOADED CALLS)\\n");
+   for(Map.Entry<String,long[]> person:perEmployee.entrySet()){long[] m=person.getValue();breakdown.append(person.getKey()).append(" · Calls ").append(m[0]).append(" · Incoming ").append(m[2]).append(" · Outgoing ").append(m[3]).append(" · Missed ").append(m[4]).append(" · Minutes ").append(m[1]/60).append("\\n");}
+   employeeBreakdown.setText(breakdown.toString());
    if(loadAllPages && !reachedEnd){loadNext();}else if(loadAllPages){loadAllPages=false;toast("All available matching calls loaded");}
   }).addOnFailureListener(e->{loading=false;loadAllPages=false;toast("Report error: "+e.getLocalizedMessage());});
  }
