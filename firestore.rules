@@ -73,7 +73,17 @@ service cloud.firestore {
       && request.resource.data.uid == request.auth.uid
       && request.resource.data.companyId == cid
       && request.resource.data.sim == member(cid,request.auth.uid).data.sim
-      && request.resource.data.keys().hasOnly(['uid','companyId','sim','fromNumber','toNumber','remoteNumber','contactName','type','startedAt','durationSec','createdAt','deviceCallId']);
+      && request.resource.data.deviceId is string
+      && request.resource.data.deviceId.size() >= 20
+      && exists(/databases/$(database)/documents/companies/$(cid)/devices/$(request.auth.uid + '_' + request.resource.data.deviceId))
+      && get(/databases/$(database)/documents/companies/$(cid)/devices/$(request.auth.uid + '_' + request.resource.data.deviceId)).data.status == 'active'
+      && get(/databases/$(database)/documents/companies/$(cid)/devices/$(request.auth.uid + '_' + request.resource.data.deviceId)).data.uid == request.auth.uid
+      && request.resource.data.deviceCallId == callId
+      && request.resource.data.type in ['INCOMING','OUTGOING','MISSED','REJECTED','BLOCKED','OTHER']
+      && request.resource.data.startedAt is int
+      && request.resource.data.durationSec is int
+      && request.resource.data.durationSec >= 0
+      && request.resource.data.keys().hasOnly(['uid','companyId','sim','fromNumber','toNumber','remoteNumber','contactName','type','startedAt','durationSec','createdAt','deviceCallId','deviceId']);
     allow update, delete: if false;
    }
   }
