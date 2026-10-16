@@ -114,7 +114,7 @@ public class MainActivity extends Activity {
   if(uid()==null){login();return;}
   label("Signed in: "+auth.getCurrentUser().getEmail());
   String userId=uid();
-  db.collection("users").document(userId).collection("companies").limit(1).get()
+  db.collection("users").document(userId).collection("companies").get()
     .addOnSuccessListener(result->{
      if(!userId.equals(uid())||!currentScreen.equals("Sharaco Call Logger"))return;
      String mode=getSharedPreferences("onboarding",0).getString(userId+"_mode","");
