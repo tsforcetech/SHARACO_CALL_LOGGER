@@ -355,7 +355,7 @@ public class MainActivity extends Activity {
   boolean allowed=prefs.getBoolean("syncConsent",false)&&cid.equals(prefs.getString("syncConsentCompany",""));
   if(allowed){askMissingPermissions();return;}
   new android.app.AlertDialog.Builder(this).setTitle("Enable automatic call syncing?")
-   .setMessage("SHARACO will read call metadata after you consent and upload it to this company's Firebase database, including phone numbers, call times, durations and optional contact names. You can pause sync later.")
+   .setMessage("If you agree, SHARACO will import call metadata from the first call of today (00:00 local time), including earlier calls today, and automatically sync subsequent calls to this company. Shared data includes phone numbers, timestamps, durations and optional contact names. You can pause sync later.")
    .setPositiveButton("Allow",(dialog,which)->{
     prefs.edit().putBoolean("syncConsent",true).putString("syncConsentCompany",cid)
      .putLong("syncConsentStartedAt",startOfToday()).apply();askMissingPermissions();
@@ -481,6 +481,7 @@ public class MainActivity extends Activity {
  void syncPrivacy(){
   page("Sync Consent & Privacy");
   label("Company: "+company);
+  label("Initial consent includes calls from the beginning of the calendar day you enable sync, including any earlier calls that day. No earlier dates are included.");
   label("When enabled, Sharaco reads call history (phone numbers, contact names if contacts permission is granted, call type, time and duration) and uploads it to the selected company's Firebase database.");
   label("Background sync is scheduled about every 15 minutes when Android permits. Your company owner and admins can access company call metadata.");
   label("You can pause future synchronization here. Previously uploaded records are not deleted automatically.");
