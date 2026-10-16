@@ -19,16 +19,22 @@ import java.util.concurrent.TimeUnit;
 
 public class FollowUpWorker extends Worker {
  public FollowUpWorker(Context context,WorkerParameters params){super(context,params);}
- public static void schedule(Context c){
+ public static void schedule(Context c,String company,String uid){
+  c.getSharedPreferences("followup_preferences",0).edit().putString("company",company).putString("uid",uid).putBoolean("enabled",true).apply();
   PeriodicWorkRequest request=new PeriodicWorkRequest.Builder(FollowUpWorker.class,15,TimeUnit.MINUTES)
     .setConstraints(new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build();
   WorkManager.getInstance(c).enqueueUniquePeriodicWork("sharaco-followups",ExistingPeriodicWorkPolicy.KEEP,request);
  }
- public static void stop(Context c){WorkManager.getInstance(c).cancelUniqueWork("sharaco-followups");}
+ public static void stop(Context c){
+  c.getSharedPreferences("followup_preferences",0).edit().putBoolean("enabled",false).remove("company").remove("uid").apply();
+  WorkManager.getInstance(c).cancelUniqueWork("sharaco-followups");
+ }
  @Override public Result doWork(){
   Context c=getApplicationContext();String uid=FirebaseAuth.getInstance().getUid();
   if(uid==null)return Result.success();
-  String company=c.getSharedPreferences("settings",0).getString("company","");
+  android.content.SharedPreferences prefs=c.getSharedPreferences("followup_preferences",0);
+  if(!prefs.getBoolean("enabled",false)||!uid.equals(prefs.getString("uid","")))return Result.success();
+  String company=prefs.getString("company","");
   if(company.isEmpty())return Result.success();
   if(Build.VERSION.SDK_INT>=33&&c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return Result.success();
   try{
@@ -47,6 +53,7 @@ public class FollowUpWorker extends Worker {
    if(overdue==0){c.getSharedPreferences("followup_notifications",0).edit().remove(key).apply();return Result.success();}
    String signature=new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(now)+":"+overdue;
    if(signature.equals(c.getSharedPreferences("followup_notifications",0).getString(key,"")))return Result.success();
+   if(!prefs.getBoolean("enabled",false)||!uid.equals(prefs.getString("uid",""))||!company.equals(prefs.getString("company","")))return Result.success();
    NotificationManager manager=(NotificationManager)c.getSystemService(Context.NOTIFICATION_SERVICE);
    if(manager==null)return Result.success();
    String channel="sharaco_followups";
