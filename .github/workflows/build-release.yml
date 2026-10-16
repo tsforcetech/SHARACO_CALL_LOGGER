@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v3.0.0 shared design system across Android screens
+# Release v3.1.0 company onboarding wizard and embedded QR scanner
 on:
   workflow_dispatch:
   push:
