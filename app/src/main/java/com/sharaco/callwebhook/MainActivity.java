@@ -242,6 +242,7 @@ public class MainActivity extends Activity {
     if(value.length()<2||value.length()>100){name.setError("Company name must contain 2 to 100 characters");return;}
     companyWizard(2,value);
    });
+   button("I already own a company",()->restoreOwnedCompany());
    button("Cancel",()->home());return;
   }
   if(step==2){
