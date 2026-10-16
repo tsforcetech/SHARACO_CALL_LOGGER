@@ -113,7 +113,7 @@ public class CallStore extends SQLiteOpenHelper {
   WorkManager.getInstance(c).cancelUniqueWork("call-sync-now");
   WorkManager.getInstance(c).cancelUniqueWork("call-sync");
  }
- public static Result pause(android.content.SharedPreferences status,String reason){status.edit().putString("status",reason).apply();return Result.success();}
+ public static Worker.Result pause(android.content.SharedPreferences status,String reason){status.edit().putString("status",reason).apply();return Worker.Result.success();}
  public static class SyncWorker extends Worker {
   public SyncWorker(Context c,WorkerParameters p){super(c,p);}
   @Override public Result doWork(){
