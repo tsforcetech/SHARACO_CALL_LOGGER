@@ -315,7 +315,7 @@ public class MainActivity extends Activity {
    if(!Boolean.TRUE.equals(doc.getBoolean("approved"))){label("Awaiting owner approval");return;}
    role=doc.getString("role");sim=doc.getString("sim")==null?"":doc.getString("sim");
    getSharedPreferences("settings",0).edit().putString("sim",sim).apply();
-   if(!sim.isEmpty()){getSharedPreferences("settings",0).edit().putString("syncCompany",company).putString("syncSim",sim).apply();if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED && getSharedPreferences("settings",0).getBoolean("syncConsent",false) && company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany","")))CallStore.schedule(this);}
+   {getSharedPreferences("settings",0).edit().putString("syncCompany",company).putString("syncSim",sim).apply();if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED && getSharedPreferences("settings",0).getBoolean("syncConsent",false) && company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany","")))CallStore.schedule(this);}
    sectionTitle("WORKSPACE");
    menuItem("☏","Calls & Follow-ups","History, leads, automatic sync",()->showSection("calls"));
    menuItem("◷","Pending Customer Calls","Open my customer calling list and dial",()->{Intent i=new Intent(this,WorklistActivity.class);i.putExtra("company",company);i.putExtra("showPending",true);startActivity(i);});
@@ -455,7 +455,10 @@ public class MainActivity extends Activity {
   boolean permission=checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED;
   label("Android call-log permission: "+(permission?"Granted":"Not granted"));
   label("My SIM: "+(sim.isEmpty()?"Not registered":sim));
-  label("Call attribution check: "+(CallStore.safeSingleSim(this)?"One active SIM verified":"Not verified. Sync will pause until one active SIM and Phone permission are available."));
+  label("Call log mode: All accessible phone call-log entries; no SIM subscription verification.");
+  label("Android rows scanned at last attempt: "+status.getInt("lastScanned",0));
+  label("New local rows at last attempt: "+status.getInt("lastNewLocal",0));
+  if(status.contains("scanError"))label("Scan issue: "+status.getString("scanError","Unknown"));
   label("This device is automatically registered when you open your approved company.");
   label("Android schedules periodic work approximately every 15 minutes. Battery optimization, connectivity, sign-in and device policies can delay sync.");
 
@@ -487,10 +490,10 @@ public class MainActivity extends Activity {
   label("When enabled, Sharaco reads call history (phone numbers, contact names if contacts permission is granted, call type, time and duration) and uploads it to the selected company's Firebase database.");
   label("Background sync is scheduled about every 15 minutes when Android permits. Your company owner and admins can access company call metadata.");
   label("You can pause future synchronization here. Previously uploaded records are not deleted automatically.");
-  label("Accuracy safeguard: call uploads are paused on dual-SIM and unverifiable devices until SIM-specific attribution is supported.");
+  label("SIM filtering is not used: all accessible phone call records may be uploaded, including calls from another SIM or line. A saved company SIM number is not proof of the originating SIM.");
   boolean enabled=getSharedPreferences("settings",0).getBoolean("syncConsent",false) && company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany",""));
   label("Current setting: "+(enabled?"Enabled":"Disabled"));
-  button("Enable Automatic Sync",()->{android.content.SharedPreferences preferences=getSharedPreferences("settings",0);long consentStart=(preferences.getBoolean("syncConsent",false)&&company.equals(preferences.getString("syncConsentCompany","")))?preferences.getLong("syncConsentStartedAt",0L):0L;if(consentStart<=0L)consentStart=startOfToday();preferences.edit().putBoolean("syncConsent",true).putString("syncConsentCompany",company).putLong("syncConsentStartedAt",consentStart).apply();if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED || checkSelfPermission(Manifest.permission.READ_PHONE_STATE)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG,Manifest.permission.READ_PHONE_STATE},12);else CallStore.schedule(this);toast("Automatic sync enabled");syncPrivacy();});
+  button("Enable Automatic Sync",()->{android.content.SharedPreferences preferences=getSharedPreferences("settings",0);long consentStart=(preferences.getBoolean("syncConsent",false)&&company.equals(preferences.getString("syncConsentCompany","")))?preferences.getLong("syncConsentStartedAt",0L):0L;if(consentStart<=0L)consentStart=startOfToday();preferences.edit().putBoolean("syncConsent",true).putString("syncConsentCompany",company).putLong("syncConsentStartedAt",consentStart).apply();if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CALL_LOG},12);else CallStore.schedule(this);toast("Automatic sync enabled");syncPrivacy();});
   button("Pause Automatic Sync",()->{getSharedPreferences("settings",0).edit().putBoolean("syncConsent",false).remove("syncConsentCompany").apply();CallStore.stop(this);toast("Background sync paused");syncPrivacy();});
  }
  void ownSim(){
@@ -541,7 +544,7 @@ public class MainActivity extends Activity {
    b.set(db.collection("users").document(d.getId()).collection("companies").document(company),directory);
    b.commit().addOnSuccessListener(v->requests()).addOnFailureListener(e->toast(e.getMessage()));
   });}}).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());}
- @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==12 && checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.READ_PHONE_STATE)==PackageManager.PERMISSION_GRANTED){if(getSharedPreferences("settings",0).getBoolean("syncConsent",false) && company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany","")))CallStore.schedule(this);toast("Permissions updated. Register this device to enable uploads.");}else if(code==12)toast("Call-log access was not granted");}
+ @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==12 && checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED){if(getSharedPreferences("settings",0).getBoolean("syncConsent",false) && company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany","")))CallStore.schedule(this);toast("Permissions updated. Register this device to enable uploads.");}else if(code==12)toast("Call-log access was not granted");}
  void manageTeam(){if(!isAdmin()){toast("Access denied");return;}page("Manage Company Team");
   db.collection("companies").document(company).collection("members").get().addOnSuccessListener(s->{
    for(DocumentSnapshot d:s){String id=d.getId();label(id+" | "+d.getString("role")+" | "+d.getString("sim"));
