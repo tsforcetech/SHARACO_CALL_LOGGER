@@ -1,5 +1,5 @@
 name: Build signed production APK
-# Release v2.9.0 durable background call sync and diagnostics
+# Release v2.9.0 corrected durable sync diagnostics
 on:
   workflow_dispatch:
   push:
