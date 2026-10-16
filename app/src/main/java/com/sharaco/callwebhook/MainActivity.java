@@ -318,6 +318,8 @@ public class MainActivity extends Activity {
    if(!sim.isEmpty()){getSharedPreferences("settings",0).edit().putString("syncCompany",company).putString("syncSim",sim).apply();if(checkSelfPermission(Manifest.permission.READ_CALL_LOG)==PackageManager.PERMISSION_GRANTED && getSharedPreferences("settings",0).getBoolean("syncConsent",false) && company.equals(getSharedPreferences("settings",0).getString("syncConsentCompany","")))CallStore.schedule(this);}
    sectionTitle("WORKSPACE");
    menuItem("☏","Calls & Follow-ups","History, leads, automatic sync",()->showSection("calls"));
+   menuItem("◷","Pending Customer Calls","Open my customer calling list and dial",()->{Intent i=new Intent(this,WorklistActivity.class);i.putExtra("company",company);i.putExtra("showPending",true);startActivity(i);});
+   menuItem("☁","Synced Calls","See my uploaded call history",()->syncedHistory());
    if(isAdmin())menuItem("▥","Reports & Insights","Company-wide call performance and activity",()->showSection("reports"));
    if(isAdmin())menuItem("▣","Company Overview","Employees, assigned numbers and sync activity",()->companyOverview());
    if("owner".equals(role)||"admin".equals(role))menuItem("♙","Team Management","QR joining, approvals and permissions",()->showSection("team"));
