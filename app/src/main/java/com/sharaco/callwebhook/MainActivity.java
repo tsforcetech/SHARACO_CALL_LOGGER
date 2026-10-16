@@ -105,20 +105,71 @@ public class MainActivity extends Activity {
  String uid(){return auth.getUid();}
  @Override public void onCreate(Bundle b){super.onCreate(b);auth=FirebaseAuth.getInstance();db=FirebaseFirestore.getInstance();store=new CallStore(this);company=getSharedPreferences("settings",0).getString("company","");sim=getSharedPreferences("settings",0).getString("sim","");home();}
  void home(){
-  section="";company="";getSharedPreferences("settings",0).edit().remove("company").apply();
+  section="";company="";role="";
+  getSharedPreferences("settings",0).edit().remove("company").apply();
   page("Sharaco Call Logger");
   ImageView brand=new ImageView(this);brand.setImageResource(R.drawable.sharaco_mark);brand.setAdjustViewBounds(true);
-  LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,110);panel.addView(brand,lp);
+  panel.addView(brand,new LinearLayout.LayoutParams(-1,UiKit.dp(this,105)));
   if(uid()==null){login();return;}
-  label("WELCOME BACK  ·  "+auth.getCurrentUser().getEmail());
-  sectionTitle("YOUR WORKSPACES");
+  label("Signed in: "+auth.getCurrentUser().getEmail());
+  String userId=uid();
+  db.collection("users").document(userId).collection("companies").limit(1).get()
+    .addOnSuccessListener(result->{
+     if(!userId.equals(uid())||!currentScreen.equals("Sharaco Call Logger"))return;
+     String mode=getSharedPreferences("onboarding",0).getString(userId+"_mode","");
+     if(result.isEmpty() && mode.isEmpty()){chooseAccountType();return;}
+     showWorkspaceHome("admin".equals(mode));
+    }).addOnFailureListener(e->{
+     if(!currentScreen.equals("Sharaco Call Logger"))return;
+     label("Unable to load your company directory: "+e.getLocalizedMessage());
+     button("Retry",()->home());
+    });
+ }
+ void chooseAccountType(){
+  page("Welcome to SHARACO");
+  label("How will you use SHARACO Call Logger? Choose your starting role.");
+  menuItem("▣","Company Administrator","Create your own company and manage team members",()->{
+   getSharedPreferences("onboarding",0).edit().putString(uid()+"_mode","admin").apply();
+   createCompany();
+  });
+  menuItem("♙","Team Member","Join your company's workspace by scanning its QR code",()->{
+   getSharedPreferences("onboarding",0).edit().putString(uid()+"_mode","team").apply();
+   teamWelcome();
+  });
+  button("Sign out",()->signOutAccount());
+ }
+ void showWorkspaceHome(boolean adminMode){
+  sectionTitle("YOUR COMPANIES");
   showMyCompanies();
-  sectionTitle("GET STARTED");
-  menuItem("＋","Create Company","Start a new company workspace",()->createCompany());
-  menuItem("▦","Join Company","Scan the QR code supplied by your manager",()->scanJoin());
   String pending=getSharedPreferences("settings",0).getString("pendingCompany","");
-  if(!pending.isEmpty())menuItem("✓","Check Join Approval","Open a company after owner approval",()->choose(pending,""));
-  button("Sign out",()->{CallStore.stop(this);FollowUpWorker.stop(this);auth.signOut();company="";getSharedPreferences("settings",0).edit().clear().apply();home();});
+  if(!pending.isEmpty())menuItem("◷","Approval status","Check whether your company owner approved your request",()->checkPending(pending));
+  sectionTitle(adminMode?"ADMIN TOOLS":"TEAM MEMBER");
+  if(adminMode)menuItem("＋","Create another company","Open the guided company creation wizard",()->createCompany());
+  menuItem("▦","Scan company QR","Join an authorized company as a team member",()->scanJoin());
+  if(!adminMode)label("Only your assigned company information will be available. Admin and reporting options are hidden.");
+  button("Sign out",()->signOutAccount());
+ }
+ void teamWelcome(){
+  page("Join as Team Member");
+  label("Step 1 · Ask your company administrator for the company's QR code.");
+  label("Step 2 · Scan the QR code in the camera frame.");
+  label("Step 3 · Enter your name and registered SIM, then wait for approval.");
+  button("Scan Company QR",()->scanJoin());
+  String pending=getSharedPreferences("settings",0).getString("pendingCompany","");
+  if(!pending.isEmpty())button("Check approval",()->checkPending(pending));
+  button("Back",()->home());
+ }
+ void checkPending(String cid){
+  db.collection("companies").document(cid).collection("members").document(uid()).get()
+   .addOnSuccessListener(d->{
+    if(Boolean.TRUE.equals(d.getBoolean("approved"))){
+     getSharedPreferences("settings",0).edit().remove("pendingCompany").apply();choose(cid,"");
+    }else{toast("Awaiting company administrator approval");teamWelcome();}
+   }).addOnFailureListener(e->toast("Approval check failed: "+e.getLocalizedMessage()));
+ }
+ void signOutAccount(){
+  CallStore.stop(this);FollowUpWorker.stop(this);auth.signOut();company="";
+  getSharedPreferences("settings",0).edit().clear().apply();home();
  }
  void login(){
    label("Welcome to Sharaco Call Logger");
@@ -154,27 +205,73 @@ public class MainActivity extends Activity {
      else showSection(backTo);
    }else if(currentScreen.equals("Company Workspace"))home();else if(!company.isEmpty())companyHome();else home();
  }
- void createCompany(){page("Create Company");EditText name=input("Company name");button("Save company",()->{
-  String n=name.getText().toString().trim();if(n.isEmpty()){toast("Company name required");return;}
+ void createCompany(){companyWizard(1,"");}
+ void companyWizard(int step,String companyName){
+  if(step==1){
+   page("Create Company · 1 of 3");
+   label("Company details");
+   EditText name=input("Company name");
+   if(!companyName.isEmpty())name.setText(companyName);
+   label("This is the company workspace your team will join.");
+   button("Continue",()->{
+    String value=name.getText().toString().trim();
+    if(value.length()<2||value.length()>100){name.setError("Company name must contain 2 to 100 characters");return;}
+    companyWizard(2,value);
+   });
+   button("Cancel",()->home());return;
+  }
+  if(step==2){
+   page("Create Company · 2 of 3");
+   label("Administrator");
+   label("Company: "+companyName);
+   label("Your signed-in account will become the company owner. Only authorized owners and admins can manage members or view company-wide reports.");
+   label("Employees join via QR and require approval.");
+   button("Continue",()->companyWizard(3,companyName));
+   button("Back",()->companyWizard(1,companyName));return;
+  }
+  page("Create Company · 3 of 3");
+  label("Review & create");
+  UiKit.cardText(this,panel,companyName,"Owner: "+auth.getCurrentUser().getEmail());
+  label("The invite QR code becomes available after the company has been created.");
+  button("Create Company",()->saveNewCompany(companyName));
+  button("Back",()->companyWizard(2,companyName));
+ }
+ void saveNewCompany(String n){
+  String ownerUid=uid();
+  if(ownerUid==null)return;
   String token=UUID.randomUUID().toString().replace("-","")+UUID.randomUUID().toString().replace("-","");
-  Map<String,Object> c=new HashMap<>();c.put("name",n);c.put("ownerUid",uid());c.put("joinToken",token);c.put("createdAt",FieldValue.serverTimestamp());
+  Map<String,Object> c=new HashMap<>();c.put("name",n);c.put("ownerUid",ownerUid);
+  c.put("joinToken",token);c.put("createdAt",FieldValue.serverTimestamp());
   DocumentReference d=db.collection("companies").document();
-  Map<String,Object> member=new HashMap<>();member.put("uid",uid());member.put("role","owner");member.put("approved",true);member.put("sim","");member.put("assignedUsers",new ArrayList<String>());
-  WriteBatch b=db.batch();b.set(d,c);b.set(d.collection("members").document(uid()),member);
-  b.commit().addOnSuccessListener(v->{Map<String,Object> index=new HashMap<>();index.put("name",n);index.put("role","owner");index.put("status","approved");index.put("updatedAt",FieldValue.serverTimestamp());db.collection("users").document(uid()).collection("companies").document(d.getId()).set(index);choose(d.getId(),"");}).addOnFailureListener(e->toast(e.getMessage()));
- });button("Back",()->home());}
+  Map<String,Object> member=new HashMap<>();member.put("uid",ownerUid);member.put("role","owner");
+  member.put("approved",true);member.put("sim","");member.put("assignedUsers",new ArrayList<String>());
+  Map<String,Object> index=new HashMap<>();index.put("name",n);index.put("role","owner");
+  index.put("status","approved");index.put("updatedAt",FieldValue.serverTimestamp());
+  WriteBatch batch=db.batch();batch.set(d,c);batch.set(d.collection("members").document(ownerUid),member);
+  batch.set(db.collection("users").document(ownerUid).collection("companies").document(d.getId()),index);
+  batch.commit().addOnSuccessListener(v->{
+   getSharedPreferences("onboarding",0).edit().putString(ownerUid+"_mode","admin").apply();
+   toast("Company created");choose(d.getId(),"");
+  }).addOnFailureListener(e->toast("Company creation failed: "+e.getLocalizedMessage()));
+ }
  void showMyCompanies(){
-  db.collection("companies").whereEqualTo("ownerUid",uid()).get().addOnSuccessListener(s->{
-   if(s.isEmpty())label("No companies owned by this account.");
-   for(DocumentSnapshot d:s)menuItem("▣",d.getString("name")==null?"Company":d.getString("name"),"Owner  ·  Open company workspace",()->choose(d.getId(),""));
-  }).addOnFailureListener(e->toast("Unable to load companies: "+e.getLocalizedMessage()));
-  db.collection("users").document(uid()).collection("companies").get().addOnSuccessListener(s->{
-   for(DocumentSnapshot d:s){
-    String cid=d.getId();if("owner".equals(d.getString("role")))continue;
-    String companyName=d.getString("name");String status=d.getString("status");
-    menuItem("♙",companyName==null?cid:companyName,(status==null?"Membership":status)+"  ·  Open workspace",()->choose(cid,""));
+  String account=uid();if(account==null)return;
+  db.collection("users").document(account).collection("companies").get().addOnSuccessListener(list->{
+   if(!account.equals(uid())||!currentScreen.equals("Sharaco Call Logger"))return;
+   if(list.isEmpty())label("No approved company membership yet. Join by QR or create a company if you are an administrator.");
+   for(DocumentSnapshot entry:list){
+    String cid=entry.getId();String title=entry.getString("name");
+    db.collection("companies").document(cid).collection("members").document(account).get()
+     .addOnSuccessListener(member->{
+      if(!account.equals(uid())||!currentScreen.equals("Sharaco Call Logger"))return;
+      if(!Boolean.TRUE.equals(member.getBoolean("approved")))return;
+      String memberRole=member.getString("role");
+      menuItem("▣",title==null?cid:title,
+        ("owner".equals(memberRole)||"admin".equals(memberRole)?"Administrator":"Team member")+" · Open workspace",
+        ()->choose(cid,""));
+     });
    }
-  }).addOnFailureListener(e->label("Joined-company directory unavailable until the latest Firebase rules are published."));
+  }).addOnFailureListener(e->label("Unable to load your company directory: "+e.getLocalizedMessage()));
  }
  void choose(String cid,String ownSim){
   company=cid;section="";getSharedPreferences("settings",0).edit().putString("company",cid).apply();
