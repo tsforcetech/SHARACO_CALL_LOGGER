@@ -441,7 +441,29 @@ public class MainActivity extends Activity {
     String a=admin.getText().toString().trim(),t=target.getText().toString().trim();if(a.isEmpty()||t.isEmpty()){toast("Enter both UIDs");return;}
     db.collection("companies").document(company).collection("members").document(a).update("assignedUsers",FieldValue.arrayUnion(t)).addOnSuccessListener(v->toast("Assigned")).addOnFailureListener(e->toast(e.getMessage()));
    });}
-  }).addOnFailureListener(e->toast(e.getMessage()));button("Back",()->home());
+  }).addOnFailureListener(e->toast(e.getMessage()));button("Repair missing employee workspace links",()->repairCompanyDirectory());button("Back",()->home());
+ }
+ void repairCompanyDirectory(){
+  if(!isAdmin()||company.isEmpty())return;
+  final String cid=company;
+  db.collection("companies").document(cid).get(Source.SERVER).addOnSuccessListener(org->{
+   String name=org.getString("name");
+   db.collection("companies").document(cid).collection("members").get(Source.SERVER).addOnSuccessListener(list->{
+    WriteBatch batch=db.batch();int count=0;
+    for(DocumentSnapshot member:list){
+     if(!Boolean.TRUE.equals(member.getBoolean("approved")))continue;
+     Map<String,Object> entry=new HashMap<>();entry.put("name",name==null?cid:name);
+     entry.put("role",member.getString("role")==null?"employee":member.getString("role"));
+     entry.put("status","approved");entry.put("updatedAt",FieldValue.serverTimestamp());
+     batch.set(db.collection("users").document(member.getId()).collection("companies").document(cid),entry);
+     count++;
+    }
+    if(count==0){toast("No approved members to repair");return;}
+    final int repaired=count;
+    batch.commit().addOnSuccessListener(v->toast("Workspace links refreshed for "+repaired+" members"))
+     .addOnFailureListener(e->toast("Unable to repair workspace links: "+e.getLocalizedMessage()));
+   }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
+  }).addOnFailureListener(e->toast(e.getLocalizedMessage()));
  }
  void localHistory(){page("Local SIM Call History");for(String row:store.history(company))label(row);button("Back",()->home());}
  void teamLogs(){if(!isAdmin()){toast("Access denied");return;}page("Company Call Logs");withAuthorizedCalls(q->q.limit(100).get().addOnSuccessListener(s->{for(DocumentSnapshot d:s)label(d.getString("remoteNumber")+" | "+d.getString("type")+" | "+d.getLong("durationSec")+" sec");} ).addOnFailureListener(e->toast(e.getMessage())));button("Back",()->home());}
