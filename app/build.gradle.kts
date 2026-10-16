@@ -9,8 +9,8 @@ android {
         applicationId = "com.sharaco.callwebhook"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "2.12.0"
+        versionCode = 24
+        versionName = "3.0.0"
     }
     val signingFile = System.getenv("SIGNING_KEYSTORE_PATH")
     if (!signingFile.isNullOrBlank()) {
