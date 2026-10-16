@@ -33,16 +33,16 @@ public class MainActivity extends Activity {
  String section="";
  static final int GOOGLE_REQUEST=712;
  boolean signingIn=false;
- int teal=Color.rgb(0,142,125);
- int ink=Color.rgb(21,39,47);
+ int teal=UiKit.BRAND;
+ int ink=UiKit.INK;
  GradientDrawable rounded(int color,int r){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(r);return d;}
- void label(String s){TextView v=new TextView(this);v.setText(s);v.setTextColor(Color.rgb(75,96,102));v.setTextSize(15);v.setPadding(8,12,8,12);panel.addView(v);}
- EditText input(String hint){EditText v=new EditText(this);v.setHint(hint);panel.addView(v);return v;}
+ void label(String s){TextView v=new TextView(this);v.setText(s);UiKit.label(v);v.setPadding(8,12,8,12);panel.addView(v);}
+ EditText input(String hint){EditText v=new EditText(this);v.setHint(hint);UiKit.input(this,v);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,UiKit.dp(this,7),0,UiKit.dp(this,7));panel.addView(v,lp);return v;}
  void button(String s,Runnable job){
   Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(15);
   boolean back=s.startsWith("‹")||s.equals("Back")||s.equals("Sign out")||s.equals("Change company");
   b.setTextColor(back?Color.rgb(22,79,74):Color.WHITE);
-  b.setBackground(rounded(back?Color.rgb(228,243,239):teal,24));b.setMinHeight(54);b.setElevation(2);
+  UiKit.action(this,b,back);
   LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);bp.setMargins(0,7,0,7);
   panel.addView(b,bp);b.setOnClickListener(v->job.run());
 }
@@ -51,17 +51,17 @@ public class MainActivity extends Activity {
  }
  void menuItem(String icon,String title,String subtitle,Runnable action){
   LinearLayout outer=new LinearLayout(this);outer.setOrientation(LinearLayout.HORIZONTAL);outer.setGravity(Gravity.CENTER_VERTICAL);
-  GradientDrawable bg=rounded(Color.WHITE,34);bg.setStroke(1,Color.rgb(229,236,236));outer.setBackground(bg);
-  outer.setPadding(16,19,16,19);outer.setElevation(3);
+  GradientDrawable bg=UiKit.shape(this,Color.WHITE,18,UiKit.BORDER);outer.setBackground(bg);
+  outer.setPadding(UiKit.dp(this,14),UiKit.dp(this,16),UiKit.dp(this,14),UiKit.dp(this,16));outer.setElevation(0);
   TextView emblem=new TextView(this);emblem.setText(icon);emblem.setGravity(Gravity.CENTER);emblem.setTextSize(24);emblem.setTextColor(teal);
-  emblem.setBackground(rounded(Color.rgb(226,246,241),20));LinearLayout.LayoutParams il=new LinearLayout.LayoutParams(54,54);outer.addView(emblem,il);
+  emblem.setBackground(rounded(Color.rgb(226,246,241),20));LinearLayout.LayoutParams il=new LinearLayout.LayoutParams(UiKit.dp(this,48),UiKit.dp(this,48));outer.addView(emblem,il);
   LinearLayout texts=new LinearLayout(this);texts.setOrientation(1);texts.setPadding(18,0,4,0);
   TextView a=new TextView(this);a.setText(title);a.setTextSize(16);a.setTextColor(Color.rgb(29,56,60));a.setTypeface(null,Typeface.BOLD);texts.addView(a);
   TextView b=new TextView(this);b.setText(subtitle);b.setTextSize(13);b.setTextColor(Color.rgb(117,134,138));texts.addView(b);
   outer.addView(texts,new LinearLayout.LayoutParams(0,-2,1));
   TextView arrow=new TextView(this);arrow.setText("›");arrow.setTextSize(28);arrow.setTextColor(teal);outer.addView(arrow);
   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,5,0,8);panel.addView(outer,lp);
-  outer.setOnClickListener(v->action.run());
+  outer.setClickable(true);outer.setFocusable(true);outer.setContentDescription(title+". "+subtitle);outer.setOnClickListener(v->action.run());
  }
  void showSection(String type){
   if((type.equals("team")||type.equals("reports")||type.equals("settings")) && !isAdmin()){toast("Company admin access required");return;}
@@ -97,11 +97,10 @@ public class MainActivity extends Activity {
  void toast(String msg){Toast.makeText(this,msg,Toast.LENGTH_LONG).show();}
  void page(String title){
   currentScreen=title;
-  panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(22,24,22,38);
-  panel.setBackgroundColor(Color.rgb(246,249,250));
+  panel=new LinearLayout(this);UiKit.screen(this,panel);
   ScrollView sv=new ScrollView(this);sv.setFillViewport(true);sv.addView(panel);setContentView(sv);
   if(!title.equals("Sharaco Call Logger")){button("‹  Back",()->onBackPressed());}
-  TextView heading=new TextView(this);heading.setText(title);heading.setTextSize(27);heading.setTextColor(ink);heading.setTypeface(null,Typeface.BOLD);heading.setPadding(2,18,2,18);panel.addView(heading);
+  TextView heading=new TextView(this);heading.setText(title);UiKit.heading(heading);heading.setPadding(2,18,2,18);panel.addView(heading);
  }
  String uid(){return auth.getUid();}
  @Override public void onCreate(Bundle b){super.onCreate(b);auth=FirebaseAuth.getInstance();db=FirebaseFirestore.getInstance();store=new CallStore(this);company=getSharedPreferences("settings",0).getString("company","");sim=getSharedPreferences("settings",0).getString("sim","");home();}
