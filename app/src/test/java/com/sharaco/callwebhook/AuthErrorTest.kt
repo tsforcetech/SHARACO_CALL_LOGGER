@@ -2,11 +2,22 @@ package com.sharaco.callwebhook
 
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
+import com.sharaco.callwebhook.data.BackendOperationException
+import com.sharaco.callwebhook.data.backendCause
 import com.sharaco.callwebhook.data.signInError
 import org.junit.Assert.*
 import org.junit.Test
 
 class AuthErrorTest {
+    @Test
+    fun operationDiagnosticsPreserveUnderlyingPermissionFailureForSync() {
+        val original = IllegalStateException("permission failure")
+        val wrapped =
+            BackendOperationException("heartbeat", BackendOperationException("call", original))
+        assertSame(original, wrapped.backendCause())
+        assertSame(original, original.backendCause())
+    }
+
     @Test
     fun providerCancellationIsVisibleAndOffersExplicitRecovery() {
         val message =

@@ -76,6 +76,9 @@ constructor(
 
 class BackendOperationException(val operation: String, cause: Throwable) : Exception(cause)
 
+fun Throwable.backendCause(): Throwable =
+    if (this is BackendOperationException) cause?.backendCause() ?: this else this
+
 fun backendErrorCode(error: Throwable): String =
     when (error) {
         is BackendOperationException -> backendErrorCode(error.cause ?: error)
