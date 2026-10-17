@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.sharaco.callwebhook.MainActivity
@@ -16,6 +17,7 @@ import com.sharaco.callwebhook.R
 
 class MessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
+        if (message.data["recipientUid"] != FirebaseAuth.getInstance().currentUser?.uid) return
         if (
             Build.VERSION.SDK_INT >= 33 &&
                 ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
@@ -41,8 +43,8 @@ class MessagingService : FirebaseMessagingService() {
             System.currentTimeMillis().toInt(),
             NotificationCompat.Builder(this, "company")
                 .setSmallIcon(R.drawable.ic_brand)
-                .setContentTitle(message.notification?.title ?: getString(R.string.app_name))
-                .setContentText(message.notification?.body)
+                .setContentTitle(message.data["title"] ?: getString(R.string.app_name))
+                .setContentText(message.data["body"])
                 .setContentIntent(intent)
                 .setAutoCancel(true)
                 .build(),

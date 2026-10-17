@@ -64,7 +64,7 @@ export const maintenance = onSchedule(
           try {
             await getMessaging().send({
               token: user.fcmToken,
-              notification: { title, body },
+              data: { title, body, recipientUid: c.ownerId },
             });
           } catch (e) {
             console.warn("Notification delivery failed", e.code);

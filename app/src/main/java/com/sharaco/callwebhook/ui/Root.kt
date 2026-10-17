@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -11,6 +12,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CallTrackRoot(model: AppViewModel) {
     val state by model.state.collectAsStateWithLifecycle()
@@ -97,7 +99,18 @@ fun CallTrackRoot(model: AppViewModel) {
                         else ->
                             key(s.uid, s.companyId, s.role) {
                                 NavHost(navController = nav, startDestination = "dashboard") {
-                                    composable("dashboard") { Dashboard(state, model, ::navigate) }
+                                    composable("dashboard") {
+                                        PullToRefreshBox(
+                                            isRefreshing =
+                                                state.busy > 0 && state.report.isNotEmpty(),
+                                            onRefresh = {
+                                                model.refreshReport()
+                                                model.loadCalls()
+                                            },
+                                        ) {
+                                            Dashboard(state, model, ::navigate)
+                                        }
+                                    }
                                     composable("team") {
                                         if (s.manager) TeamScreen(state, model, ::navigate)
                                     }

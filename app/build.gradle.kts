@@ -1,4 +1,5 @@
 plugins {
+    id("com.android.compose.screenshot")
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
@@ -7,6 +8,7 @@ plugins {
     id("com.google.firebase.crashlytics")
 }
 android {
+    experimentalProperties["android.experimental.enableScreenshotTest"] = true
     namespace = "com.sharaco.callwebhook"
     compileSdk = 37
     defaultConfig {
@@ -38,6 +40,8 @@ android {
 }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 dependencies {
+    screenshotTestImplementation("com.android.tools.screenshot:screenshot-validation-api:0.0.1-alpha16")
+    screenshotTestImplementation("androidx.compose.ui:ui-tooling")
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")

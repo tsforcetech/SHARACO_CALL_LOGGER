@@ -106,7 +106,13 @@ export const getReport = callable(async (r, d) => {
       .collection("daily")
       .where("day", ">=", start.toISODate())
       .where("day", "<", end.toISODate())
+      .limit(10001)
       .get();
+    requireThat(
+      docs.size <= 10000,
+      "Narrow the date range or employee selection for this report.",
+      "resource-exhausted",
+    );
     const selected = docs.docs.filter(
       (s) =>
         s.data().employeeUid !== "ALL" &&
@@ -120,6 +126,26 @@ export const getReport = callable(async (r, d) => {
       unique = new Set(),
       staffNumbers = new Map();
     let count = 0;
+    // Fetch independent daily number sets with bounded concurrency, never all raw calls.
+    const numberSets = new Map();
+    for (let offset = 0; offset < selected.length; offset += 16) {
+      await Promise.all(
+        selected.slice(offset, offset + 16).map(async (s) => {
+          const nums = await s.ref
+            .collection("numbers")
+            .limit(100001)
+            .select()
+            .get();
+          count += nums.size;
+          requireThat(
+            count <= 100000,
+            "Narrow the date range for exact unique-number reporting.",
+            "resource-exhausted",
+          );
+          numberSets.set(s.id, nums);
+        }),
+      );
+    }
     for (const s of selected) {
       const v = s.data(),
         row = staff.get(v.employeeUid) ?? {
@@ -134,13 +160,7 @@ export const getReport = callable(async (r, d) => {
       }
       row.lastCallAt = Math.max(row.lastCallAt, v.lastCallAt ?? 0);
       staff.set(v.employeeUid, row);
-      const nums = await s.ref.collection("numbers").select().get();
-      count += nums.size;
-      requireThat(
-        count <= 100000,
-        "Narrow the date range for exact unique-number reporting.",
-        "resource-exhausted",
-      );
+      const nums = numberSets.get(s.id);
       const own = staffNumbers.get(v.employeeUid) ?? new Set();
       for (const n of nums.docs) {
         unique.add(n.id);

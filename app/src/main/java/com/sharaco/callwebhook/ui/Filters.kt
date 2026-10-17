@@ -13,7 +13,11 @@ import java.time.temporal.ChronoUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReportFilters(state: AppState, model: AppViewModel) {
+fun ReportFilters(state: AppState, model: AppViewModel) = ReportFilters(state, model::setFilters)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ReportFilters(state: AppState, onFilters: (Filters) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val f = state.filters
     Row(
@@ -32,7 +36,7 @@ fun ReportFilters(state: AppState, model: AppViewModel) {
                             "This month" -> today.withDayOfMonth(1)
                             else -> end
                         }
-                    model.setFilters(f.copy(start = start, end = end))
+                    onFilters(f.copy(start = start, end = end))
                 },
                 label = { Text(label) },
             )
@@ -140,7 +144,7 @@ fun ReportFilters(state: AppState, model: AppViewModel) {
                             ) {
                                 "Check the duration range."
                             }
-                            model.setFilters(draft.copy(start = start, end = end))
+                            onFilters(draft.copy(start = start, end = end))
                             open = false
                         }
                             .onFailure { error = it.message ?: "Check the filters." }

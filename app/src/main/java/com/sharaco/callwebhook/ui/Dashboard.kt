@@ -1,20 +1,60 @@
 package com.sharaco.callwebhook.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.sharaco.callwebhook.domain.*
 
 @Composable
-fun Dashboard(state: AppState, model: AppViewModel, navigate: (String) -> Unit) {
+fun Dashboard(state: AppState, model: AppViewModel, navigate: (String) -> Unit) =
+    DashboardContent(
+        state,
+        model::setFilters,
+        {
+            model.refreshReport()
+            model.loadCalls()
+        },
+        navigate,
+    )
+
+@Composable
+fun DashboardContent(
+    state: AppState,
+    onFilters: (Filters) -> Unit,
+    onRefresh: () -> Unit,
+    navigate: (String) -> Unit,
+) {
     val s = state.session ?: return
     Page(
         if (s.manager) s.company.str("name")
         else "Hello, ${s.member.str("name").substringBefore(' ')}",
         "Your business activity at a glance",
     ) {
-        ReportFilters(state, model)
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Avatar(s.company.str("name"), s.company.str("logo"))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (s.manager) "COMPANY OVERVIEW" else "MY WORKDAY",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(s.member.str("name"), style = MaterialTheme.typography.titleSmall)
+            }
+            if (s.manager)
+                IconButton({ navigate("notifications") }) {
+                    Icon(Icons.Default.NotificationsNone, "Notifications")
+                }
+        }
+        ReportFilters(state, onFilters)
         if (!s.manager && !state.permission)
             Hint("Call history access disabled. Open Sync to enable permission.", true)
         if (s.manager && state.employees.isEmpty())
@@ -23,10 +63,8 @@ fun Dashboard(state: AppState, model: AppViewModel, navigate: (String) -> Unit) 
                 Button({ navigate("team") }) { Text("Add first employee") }
             }
         if (state.report.isEmpty()) {
-            Hint(
-                if (state.busy > 0) "Loading activity…"
-                else "No report loaded. Connect to the internet and refresh."
-            )
+            if (state.busy > 0) LoadingCards()
+            else Hint("No report loaded. Connect to the internet and refresh.")
         } else {
             Metrics(state.report.row("metrics")) { key ->
                 val types =
@@ -36,7 +74,7 @@ fun Dashboard(state: AppState, model: AppViewModel, navigate: (String) -> Unit) 
                         "missed" -> setOf("MISSED")
                         else -> emptySet()
                     }
-                model.setFilters(
+                onFilters(
                     state.filters.copy(
                         types = types,
                         connection = if (key in listOf("connected", "average")) "CONNECTED" else "",
@@ -61,7 +99,7 @@ fun Dashboard(state: AppState, model: AppViewModel, navigate: (String) -> Unit) 
             if (s.manager)
                 Panel("Staff performance") {
                     StaffChart(state.report.rows("staff")) { row ->
-                        model.setFilters(state.filters.copy(employees = setOf(row.str("id"))))
+                        onFilters(state.filters.copy(employees = setOf(row.str("id"))))
                         navigate("reports")
                     }
                 }
@@ -92,10 +130,7 @@ fun Dashboard(state: AppState, model: AppViewModel, navigate: (String) -> Unit) 
             OutlinedButton({ navigate("devices") }) { Text("Review devices needing attention") }
         }
         OutlinedButton(
-            {
-                model.refreshReport()
-                model.loadCalls()
-            },
+            onRefresh,
             Modifier.fillMaxWidth(),
             enabled = state.busy == 0,
         ) {

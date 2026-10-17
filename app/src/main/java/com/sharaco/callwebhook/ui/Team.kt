@@ -57,7 +57,8 @@ fun TeamScreen(state: AppState, model: AppViewModel, navigate: (String) -> Unit)
             Card(
                 onClick = { selected = employee },
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors =
+                    CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(employee.str("name"), style = MaterialTheme.typography.titleMedium)
@@ -256,7 +257,8 @@ fun InvitationDialog(invite: Row, zone: String, close: () -> Unit) {
                 for (x in 0 until 480) for (y in 0 until 480) setPixel(
                     x,
                     y,
-                    if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE,
+                    if (matrix[x, y]) android.graphics.Color.BLACK
+                    else android.graphics.Color.WHITE,
                 )
             }
         }

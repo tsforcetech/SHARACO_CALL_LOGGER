@@ -46,9 +46,15 @@ fun LegalDialog(terms: Boolean, close: () -> Unit) {
 @Composable
 fun SignInScreen(model: AppViewModel) {
     val activity = LocalContext.current as Activity
+    SignInContent { model.signIn(activity) }
+}
+
+@Composable
+fun SignInContent(signIn: () -> Unit) {
     var legal by remember { mutableStateOf<String?>(null) }
     Page(stringResource(R.string.app_name), stringResource(R.string.tagline)) {
-        Spacer(Modifier.height(48.dp))
+        Avatar("CT", modifier = Modifier.size(64.dp))
+        Spacer(Modifier.height(16.dp))
         Text(
             "Business calls.\nClearer decisions.",
             style = MaterialTheme.typography.displaySmall,
@@ -60,7 +66,9 @@ fun SignInScreen(model: AppViewModel) {
             Text("Keep calls queued safely when offline.")
             Text("Know when a device needs attention.")
         }
-        Button({ model.signIn(activity) }, Modifier.fillMaxWidth()) { Text("Continue with Google") }
+        Button(signIn, Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+            Text("Continue with Google")
+        }
         Row {
             TextButton({ legal = "privacy" }) { Text("Privacy Policy") }
             TextButton({ legal = "terms" }) { Text("Terms") }
