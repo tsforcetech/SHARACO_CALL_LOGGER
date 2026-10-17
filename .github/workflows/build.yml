@@ -1,0 +1,53 @@
+name: Verify CallTrack Pro
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - name: Install SDK
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"'
+      - run: gradle :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --no-daemon --stacktrace
+      - name: Render native UI previews
+        run: gradle :app:updateDebugScreenshotTest --no-daemon --max-workers=2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CallTrack-Pro-UI-previews
+          path: app/src/screenshotTestDebug/reference/**/*.png
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CallTrack-Pro-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --prefix functions
+      - run: npm test --prefix functions
+      - run: npx --yes firebase-tools@14.12.0 emulators:exec --project demo-calltrack --only firestore 'cd functions && npm run test:rules && npm run test:integration'

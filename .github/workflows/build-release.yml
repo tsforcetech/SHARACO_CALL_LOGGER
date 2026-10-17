@@ -1,11 +1,12 @@
-name: Build signed production APK
-# Release v3.6.0 corrected CRM lambda and tabular reporting
+name: Build signed release
 on:
   workflow_dispatch:
   push:
-    branches: [main]
-    paths:
-      - '.github/workflows/build-release.yml'
+    branches: ['codex/calltrack-pro-rebuild']
+    paths: ['.github/workflows/build-release.yml', 'app/**', '*.gradle.kts', 'gradle/**', 'gradle.properties']
+concurrency:
+  group: signed-release-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -19,35 +20,30 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
-      - name: Install Android SDK
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
-      # Release v2.1.0 paginated reporting and team access controls
-      - name: Validate persistent signing secrets
+          gradle-version: '9.6.0'
+          cache-read-only: false
+      - run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"'
+      - name: Build with existing signing secrets
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          test -n "$KEYSTORE_B64" || { echo "Missing ANDROID_KEYSTORE_BASE64"; exit 1; }
-          test -n "$STORE_PASS" && test -n "$KEY_ALIAS" && test -n "$KEY_PASS" || { echo "Missing signing credentials"; exit 1; }
-          printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' | base64 --decode > "$RUNNER_TEMP/sharaco-release.jks"
-          test -s "$RUNNER_TEMP/sharaco-release.jks" || { echo "Decoded keystore is empty"; exit 1; }
-          echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/sharaco-release.jks" >> "$GITHUB_ENV"
-          echo "SIGNING_STORE_PASSWORD=$STORE_PASS" >> "$GITHUB_ENV"
-          echo "SIGNING_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
-          echo "SIGNING_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
-      - name: Build signed release
-        run: gradle :app:assembleRelease --no-daemon --stacktrace
-      - name: Show signing certificate fingerprint
+          test -n "$KEYSTORE_B64" && test -n "$SIGNING_STORE_PASSWORD" && test -n "$SIGNING_KEY_ALIAS" && test -n "$SIGNING_KEY_PASSWORD"
+          export SIGNING_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          trap 'rm -f "$SIGNING_KEYSTORE_PATH"' EXIT
+          printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' | base64 --decode > "$SIGNING_KEYSTORE_PATH"
+          gradle :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+      - name: Verify APK signature and report Firebase registration
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk
-      - name: Upload signed APK
-        uses: actions/upload-artifact@v4
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk > signing-fingerprints.txt
+          python3 scripts/check-signing.py
+      - uses: actions/upload-artifact@v4
         with:
-          name: Sharaco-Call-Logger-signed-release
-          path: app/build/outputs/apk/release/app-release.apk
+          name: CallTrack-Pro-signed
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
+            signing-fingerprints.txt
           if-no-files-found: error

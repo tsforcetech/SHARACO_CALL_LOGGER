@@ -2,102 +2,20 @@ rules_version = '2';
 service cloud.firestore {
  match /databases/{database}/documents {
   function signed() { return request.auth != null; }
-  function company(cid) { return get(/databases/$(database)/documents/companies/$(cid)); }
-  function member(cid, uid) { return get(/databases/$(database)/documents/companies/$(cid)/members/$(uid)); }
-  function active(cid) { return signed() && exists(/databases/$(database)/documents/companies/$(cid)/members/$(request.auth.uid)) && member(cid, request.auth.uid).data.approved == true; }
-  function owner(cid) { return signed() && exists(/databases/$(database)/documents/companies/$(cid)) && company(cid).data.ownerUid == request.auth.uid; }
-  function admin(cid) { return active(cid) && (member(cid,request.auth.uid).data.role in ['owner','admin']); }
-  function canReadCall(cid) { return admin(cid) || (active(cid) && (resource.data.uid == request.auth.uid || member(cid,request.auth.uid).data.get('assignedUsers',[]).hasAny([resource.data.uid]))); }
+  function member(cid) { return get(/databases/$(database)/documents/companies/$(cid)/members/$(request.auth.uid)).data; }
+  function active(cid) { return signed() && member(cid).status == 'ACTIVE' && get(/databases/$(database)/documents/companies/$(cid)).data.status == 'ACTIVE'; }
+  function manager(cid) { return active(cid) && member(cid).role in ['OWNER', 'ADMIN']; }
+  match /users/{uid} { allow read: if signed() && request.auth.uid == uid; }
   match /companies/{cid} {
-   allow create: if signed() && request.resource.data.keys().hasOnly(['name','ownerUid','createdAt','joinToken']) && request.resource.data.ownerUid == request.auth.uid && request.resource.data.name is string && request.resource.data.joinToken is string && request.resource.data.joinToken.size() >= 30;
-   allow get, list: if owner(cid) || active(cid);
-   allow update: if owner(cid) && request.resource.data.ownerUid == resource.data.ownerUid;
-   allow delete: if false;
-   match /members/{uid} {
-    allow get: if admin(cid) || (signed() && request.auth.uid == uid);
-    allow list: if admin(cid);
-    allow create: if signed() && request.resource.data.uid == uid && request.resource.data.approved == true && ((uid == request.auth.uid && request.resource.data.role == 'owner' && getAfter(/databases/$(database)/documents/companies/$(cid)).data.ownerUid == uid) || (admin(cid) && request.resource.data.role == 'employee') || (owner(cid) && request.resource.data.role in ['supervisor','admin']));
-    allow update: if (owner(cid) && request.resource.data.uid == resource.data.uid) || (active(cid) && uid == request.auth.uid && resource.data.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sim']) && request.resource.data.sim is string && request.resource.data.sim.matches('\\+[0-9]{8,15}'));
-    allow delete: if (owner(cid) && uid != request.auth.uid) || (signed() && uid == request.auth.uid && !owner(cid));
-   }
-   match /join_requests/{uid} {
-    allow create: if signed() && request.auth.uid == uid && !exists(/databases/$(database)/documents/companies/$(cid)/join_requests/$(uid))
-      && request.resource.data.keys().hasOnly(['uid','name','sim','token','status','requestedAt'])
-      && request.resource.data.uid == uid
-      && request.resource.data.status == 'pending'
-      && request.resource.data.token == company(cid).data.joinToken
-      && request.resource.data.sim is string;
-    allow get: if owner(cid) || (signed() && request.auth.uid == uid);
-    allow list: if admin(cid);
-    allow update: if admin(cid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) && resource.data.status == 'pending' && request.resource.data.status == 'approved';
-    allow delete: if owner(cid) || (signed() && request.auth.uid == uid);
-   }
-   match /assigned_numbers/{itemId} {
-    allow get, list: if admin(cid) || (active(cid) && resource.data.assignedTo == request.auth.uid);
-    allow create: if admin(cid)
-      && request.resource.data.keys().hasOnly(['phone','name','notes','assignedTo','status','createdBy','createdAt','updatedAt'])
-      && request.resource.data.phone is string
-      && request.resource.data.phone.size() >= 9
-      && request.resource.data.phone.size() <= 16
-      && request.resource.data.status == 'pending'
-      && request.resource.data.createdBy == request.auth.uid
-      && exists(/databases/$(database)/documents/companies/$(cid)/members/$(request.resource.data.assignedTo))
-      && get(/databases/$(database)/documents/companies/$(cid)/members/$(request.resource.data.assignedTo)).data.approved == true;
-    allow update: if active(cid)
-      && (admin(cid) || resource.data.assignedTo == request.auth.uid)
-      && request.resource.data.assignedTo == resource.data.assignedTo
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','contactedBy','contactedAt','outcome','nextFollowUp','lastUpdatedBy','updatedAt'])
-      && request.resource.data.status in ['pending','contacted','interested','follow_up','won','lost']
-      && request.resource.data.get('outcome','') is string
-      && request.resource.data.get('outcome','').size() <= 1000
-      && request.resource.data.get('nextFollowUp','') is string
-      && request.resource.data.get('nextFollowUp','').size() <= 30
-      && request.resource.data.get('lastUpdatedBy',request.auth.uid) == request.auth.uid
-      && request.resource.data.get('contactedBy',request.auth.uid) == request.auth.uid;
-    allow delete: if false;
-   }
-   match /devices/{deviceId} {
-    allow get: if admin(cid) || (active(cid) && deviceId.matches(request.auth.uid + '_[0-9a-fA-F-]{36}'));
-    allow list: if admin(cid) || (active(cid) && resource.data.uid == request.auth.uid);
-    allow create: if active(cid)
-      && request.resource.data.uid == request.auth.uid
-      && request.resource.data.keys().hasOnly(['uid','model','androidVersion','lastSeen','status'])
-      && request.resource.data.status == 'active';
-    allow update: if admin(cid)
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-      && request.resource.data.status in ['active','inactive'];
-    allow delete: if owner(cid);
-   }
-   match /call_logs/{callId} {
-    allow get, list: if canReadCall(cid);
-    allow create: if active(cid)
-      && request.resource.data.uid == request.auth.uid
-      && request.resource.data.companyId == cid
-      && request.resource.data.sim == member(cid,request.auth.uid).data.sim
-      && request.resource.data.deviceId is string
-      && request.resource.data.deviceId.size() >= 20
-      && exists(/databases/$(database)/documents/companies/$(cid)/devices/$(request.auth.uid + '_' + request.resource.data.deviceId))
-      && get(/databases/$(database)/documents/companies/$(cid)/devices/$(request.auth.uid + '_' + request.resource.data.deviceId)).data.status == 'active'
-      && get(/databases/$(database)/documents/companies/$(cid)/devices/$(request.auth.uid + '_' + request.resource.data.deviceId)).data.uid == request.auth.uid
-      && request.resource.data.deviceCallId == callId
-      && request.resource.data.type in ['INCOMING','OUTGOING','MISSED','REJECTED','BLOCKED','VOICEMAIL','ANSWERED_EXTERNALLY','OTHER']
-      && request.resource.data.startedAt is int
-      && request.resource.data.durationSec is int
-      && request.resource.data.durationSec >= 0
-      && request.resource.data.keys().hasOnly(['uid','companyId','sim','fromNumber','toNumber','remoteNumber','contactName','type','startedAt','durationSec','createdAt','deviceCallId','deviceId']);
-    allow update, delete: if false;
-   }
+   allow read: if active(cid);
+   match /members/{uid} { allow read: if signed() && (request.auth.uid == uid || manager(cid)); }
+   match /employees/{eid} { allow read: if manager(cid); }
+   match /calls/{callId} { allow read: if active(cid) && (manager(cid) || resource.data.employeeUid == request.auth.uid); }
+   match /devices/{deviceId} { allow read: if active(cid) && (manager(cid) || resource.data.employeeUid == request.auth.uid); }
+   match /daily/{day} { allow read: if active(cid) && (manager(cid) || resource.data.employeeUid == request.auth.uid); }
+   match /notifications/{nid} { allow read: if manager(cid); }
+   match /audit/{aid} { allow read: if active(cid) && member(cid).role == 'OWNER'; }
   }
-  match /users/{userId}/companies/{companyId} {
-    allow get, list: if signed() && request.auth.uid == userId;
-    allow create: if signed()
-      && request.resource.data.keys().hasOnly(['name','role','status','updatedAt'])
-      && request.resource.data.status == 'approved'
-      && ((userId == request.auth.uid && getAfter(/databases/$(database)/documents/companies/$(companyId)).data.ownerUid == userId)
-          || (admin(companyId) && getAfter(/databases/$(database)/documents/companies/$(companyId)/members/$(userId)).data.approved == true));
-    allow update: if admin(companyId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','role','status','updatedAt']);
-    allow delete: if owner(companyId) || (signed() && request.auth.uid == userId);
-  }
-  match /{other=**} { allow read, write: if false; }
+  match /{document=**} { allow write: if false; }
  }
 }
