@@ -101,6 +101,84 @@ test("onboarding, invite binding, device replacement, idempotent uploads and rep
     assert.equal(report.metrics.total, 1);
     assert.equal(report.metrics.talk, 60);
     assert.equal(report.metrics.unique, 1);
+    const filters = {
+      from: day.toMillis(),
+      to: day.plus({ days: 1 }).toMillis(),
+    };
+    await assert.rejects(
+      api.ingestCalls.run(
+        req(staff, {
+          ...payload,
+          calls: [
+            { ...call, callTimestamp: day.minus({ days: 1 }).toMillis() },
+          ],
+        }),
+      ),
+      /monitoring period/,
+    );
+    const many = Array.from({ length: 60 }, (_, i) => ({
+      ...call,
+      androidCallLogId: String(i + 2),
+      durationSeconds: i,
+      callTimestamp: timestamp + i,
+    }));
+    await api.ingestCalls.run(req(staff, { ...payload, calls: many }));
+    const page1 = await api.listCalls.run(
+      req(owner, { companyId, filters, sort: "LONGEST" }),
+    );
+    assert.equal(page1.calls.length, 50);
+    assert.ok(
+      page1.calls.every(
+        (c, i, a) => i === 0 || a[i - 1].durationSeconds >= c.durationSeconds,
+      ),
+    );
+    const page2 = await api.listCalls.run(
+      req(owner, { companyId, filters, sort: "LONGEST", cursor: page1.cursor }),
+    );
+    assert.equal(page2.calls.length, 11);
+    assert.equal(
+      new Set([...page1.calls, ...page2.calls].map((c) => c.id)).size,
+      61,
+    );
+    const forcedOwn = await api.listCalls.run(
+      req(staff, {
+        companyId,
+        filters: { ...filters, employees: ["someone-else"] },
+      }),
+    );
+    assert.ok(forcedOwn.calls.every((c) => c.employeeUid === staff));
+    await api.deviceHeartbeat.run(
+      req(staff, { companyId, deviceId: "phone1", callLogPermission: false }),
+    );
+    assert.equal(
+      (await db.doc(`companies/${companyId}/devices/phone1`).get()).data()
+        .callLogPermission,
+      false,
+    );
+    const inviteEmployee = await api.saveEmployee.run(
+      req(owner, { companyId, name: "Invite checks", code: "E2" }),
+    );
+    const revocable = await api.createInvite.run(
+      req(owner, { companyId, employeeId: inviteEmployee.employeeId }),
+    );
+    await api.revokeInvite.run(
+      req(owner, { companyId, employeeId: inviteEmployee.employeeId }),
+    );
+    await assert.rejects(
+      api.inspectInvite.run(req(staff, { token: revocable.token })),
+      /invalid, expired/,
+    );
+    const expired = await api.createInvite.run(
+      req(owner, { companyId, employeeId: inviteEmployee.employeeId }),
+    );
+    const { hash } = await import("../src/domain.js");
+    await db
+      .doc(`invitations/${hash(expired.token)}`)
+      .update({ expiresAt: Date.now() - 1 });
+    await assert.rejects(
+      api.inspectInvite.run(req(staff, { token: expired.token })),
+      /invalid, expired/,
+    );
     await assert.rejects(
       api.registerDevice.run(req(staff, { companyId, deviceId: "phone2" })),
       /Another device/,

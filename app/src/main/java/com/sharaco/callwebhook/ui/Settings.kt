@@ -1,9 +1,9 @@
 package com.sharaco.callwebhook.ui
 
-import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.util.Base64
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -23,7 +23,12 @@ import kotlinx.coroutines.withContext
 fun SettingsScreen(state: AppState, model: AppViewModel, navigate: (String) -> Unit) {
     val s = state.session ?: return
     val context = LocalContext.current
+    val activity = LocalActivity.current
     val scope = rememberCoroutineScope()
+    val notifications =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+            model.permissionsChanged()
+        }
     var companyForm by remember { mutableStateOf(false) }
     var legal by remember { mutableStateOf<String?>(null) }
     var confirm by remember { mutableStateOf<String?>(null) }
@@ -74,6 +79,12 @@ fun SettingsScreen(state: AppState, model: AppViewModel, navigate: (String) -> U
         }
         if (s.manager)
             Panel("Company tools") {
+                if (android.os.Build.VERSION.SDK_INT >= 33 && !state.notificationPermission)
+                    TextButton({
+                        notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }) {
+                        Text("Enable company notifications")
+                    }
                 TextButton({ navigate("devices") }) { Text("Devices & sync health") }
                 TextButton({ navigate("notifications") }) { Text("Notifications") }
                 if (s.role == "OWNER") {
@@ -121,7 +132,7 @@ fun SettingsScreen(state: AppState, model: AppViewModel, navigate: (String) -> U
             when (action) {
                 "SIGN OUT" -> model.signOut()
                 "LEAVE" -> model.leave()
-                else -> model.delete(context as Activity, action == "DELETE COMPANY")
+                else -> activity?.let { model.delete(it, action == "DELETE COMPANY") }
             }
         }
     }

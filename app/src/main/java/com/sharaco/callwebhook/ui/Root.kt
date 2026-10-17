@@ -29,6 +29,15 @@ fun CallTrackRoot(model: AppViewModel) {
         val route = entry?.destination?.route ?: "dashboard"
         val s = state.session
         val ready = s != null && s.companyId.isNotBlank()
+        LaunchedEffect(s?.uid, s?.companyId) {
+            if (
+                ready &&
+                    s?.role != "OWNER" &&
+                    s?.member?.get("activeDeviceId").toString().let { it == "" || it == "null" }
+            ) {
+                nav.navigate("sync") { launchSingleTop = true }
+            }
+        }
         val tabs =
             if (s?.manager == true)
                 listOf(

@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { DateTime } from "luxon";
+import { isSupportedCountry } from "libphonenumber-js";
 import { getAuth } from "firebase-admin/auth";
 import {
   db,
@@ -24,7 +25,10 @@ function profile(d) {
     "Choose a valid IANA time zone.",
   );
   const country = text(d.country || "AE", 2).toUpperCase();
-  requireThat(/^[A-Z]{2}$/.test(country), "Use a two-letter country code.");
+  requireThat(
+    /^[A-Z]{2}$/.test(country) && isSupportedCountry(country),
+    "Use a supported two-letter country code.",
+  );
   return {
     name,
     timeZone,
