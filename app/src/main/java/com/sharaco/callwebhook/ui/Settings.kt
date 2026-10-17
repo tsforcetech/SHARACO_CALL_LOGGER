@@ -107,7 +107,7 @@ fun SettingsScreen(state: AppState, model: AppViewModel, navigate: (String) -> U
         }
     }
     if (companyForm)
-        CompanyForm(s.company, { companyForm = false }) {
+        CompanyForm(s.company, { companyForm = false }, state.busy > 0) {
             model.action("updateCompany", it) { companyForm = false }
         }
     legal?.let { LegalDialog(it == "terms") { legal = null } }

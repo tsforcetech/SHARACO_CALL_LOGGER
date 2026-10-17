@@ -103,7 +103,7 @@ fun CallTrackRoot(model: AppViewModel) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator()
                             }
-                        s == null -> SignInScreen(model)
+                        s == null -> SignInScreen(model, state.busy > 0)
                         s.companyId.isBlank() -> WorkspaceScreen(state, model)
                         else ->
                             key(s.uid, s.companyId, s.role) {

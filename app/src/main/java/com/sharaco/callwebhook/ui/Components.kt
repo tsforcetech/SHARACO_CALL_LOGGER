@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.CallMade
+import androidx.compose.material.icons.automirrored.filled.CallMissed
+import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -190,10 +193,10 @@ fun Metrics(metrics: Row, click: (String) -> Unit) {
                                 )
                                 Icon(
                                     when (key) {
-                                        "outgoing" -> Icons.Default.CallMade
-                                        "incoming" -> Icons.Default.CallReceived
+                                        "outgoing" -> Icons.AutoMirrored.Filled.CallMade
+                                        "incoming" -> Icons.AutoMirrored.Filled.CallReceived
                                         "connected" -> Icons.Default.CheckCircle
-                                        "missed" -> Icons.Default.CallMissed
+                                        "missed" -> Icons.AutoMirrored.Filled.CallMissed
                                         "talk" -> Icons.Default.Schedule
                                         "average" -> Icons.Default.Timer
                                         "unique" -> Icons.Default.PeopleOutline
@@ -329,9 +332,9 @@ fun Avatar(name: String, logo: String = "", modifier: Modifier = Modifier) {
             if (logo.isBlank()) null
             else
                 runCatching {
-                        val bytes = android.util.Base64.decode(logo, android.util.Base64.DEFAULT)
-                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    }
+                    val bytes = android.util.Base64.decode(logo, android.util.Base64.DEFAULT)
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }
                     .getOrNull()
         }
     Surface(

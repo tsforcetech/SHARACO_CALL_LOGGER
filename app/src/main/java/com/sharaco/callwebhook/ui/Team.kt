@@ -80,7 +80,7 @@ fun TeamScreen(state: AppState, model: AppViewModel, navigate: (String) -> Unit)
         }
     }
     edit?.let { employee ->
-        EmployeeForm(employee, { edit = null }) { values ->
+        EmployeeForm(employee, { edit = null }, state.busy > 0) { values ->
             model.saveEmployee(values) { edit = null }
         }
     }
@@ -201,7 +201,7 @@ fun TeamScreen(state: AppState, model: AppViewModel, navigate: (String) -> Unit)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EmployeeForm(employee: Row, close: () -> Unit, save: (Row) -> Unit) {
+fun EmployeeForm(employee: Row, close: () -> Unit, busy: Boolean = false, save: (Row) -> Unit) {
     val fields =
         listOf(
             "name" to "Employee name",
@@ -238,7 +238,8 @@ fun EmployeeForm(employee: Row, close: () -> Unit, save: (Row) -> Unit) {
             Button(
                 { save(values.toMap() + ("employeeId" to employee.str("id"))) },
                 Modifier.fillMaxWidth(),
-                enabled = !values["name"].isNullOrBlank() && !values["code"].isNullOrBlank(),
+                enabled =
+                    !busy && !values["name"].isNullOrBlank() && !values["code"].isNullOrBlank(),
             ) {
                 Text("Save employee")
             }

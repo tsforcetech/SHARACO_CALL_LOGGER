@@ -43,13 +43,13 @@ fun LegalDialog(terms: Boolean, close: () -> Unit) {
 }
 
 @Composable
-fun SignInScreen(model: AppViewModel) {
+fun SignInScreen(model: AppViewModel, busy: Boolean = false) {
     val activity = LocalActivity.current ?: return
-    SignInContent { model.signIn(activity) }
+    SignInContent(!busy) { model.signIn(activity) }
 }
 
 @Composable
-fun SignInContent(signIn: () -> Unit) {
+fun SignInContent(enabled: Boolean = true, signIn: () -> Unit) {
     var legal by remember { mutableStateOf<String?>(null) }
     Page(stringResource(R.string.app_name), stringResource(R.string.tagline)) {
         Avatar("CT", modifier = Modifier.size(64.dp))
@@ -65,7 +65,7 @@ fun SignInContent(signIn: () -> Unit) {
             Text("Keep calls queued safely when offline.")
             Text("Know when a device needs attention.")
         }
-        Button(signIn, Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+        Button(signIn, Modifier.fillMaxWidth().heightIn(min = 52.dp), enabled = enabled) {
             Text("Continue with Google")
         }
         Row {
@@ -110,7 +110,10 @@ fun WorkspaceScreen(state: AppState, model: AppViewModel) {
                 }) {
                     Text("Scan QR")
                 }
-                Button({ model.inspectInvite(token.trim()) }, enabled = token.isNotBlank()) {
+                Button(
+                    { model.inspectInvite(token.trim()) },
+                    enabled = token.isNotBlank() && state.busy == 0,
+                ) {
                     Text("Verify code")
                 }
             }
@@ -125,7 +128,10 @@ fun WorkspaceScreen(state: AppState, model: AppViewModel) {
                         Modifier.padding(top = 8.dp),
                     )
                 }
-                Button({ model.join(state.preview.str("token")) }, enabled = consent) {
+                Button(
+                    { model.join(state.preview.str("token")) },
+                    enabled = consent && state.busy == 0,
+                ) {
                     Text("Join company")
                 }
             }
@@ -133,15 +139,14 @@ fun WorkspaceScreen(state: AppState, model: AppViewModel) {
         TextButton({ model.signOut() }) { Text("Sign out") }
     }
     if (create)
-        CompanyForm(emptyMap(), { create = false }) {
-            model.createCompany(it)
-            create = false
+        CompanyForm(emptyMap(), { create = false }, state.busy > 0) {
+            model.createCompany(it) { create = false }
         }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CompanyForm(initial: Row, close: () -> Unit, save: (Row) -> Unit) {
+fun CompanyForm(initial: Row, close: () -> Unit, busy: Boolean = false, save: (Row) -> Unit) {
     val fields =
         listOf(
             "name" to "Company name",
@@ -222,8 +227,9 @@ fun CompanyForm(initial: Row, close: () -> Unit, save: (Row) -> Unit) {
                         )
                 },
                 Modifier.fillMaxWidth(),
+                enabled = !busy,
             ) {
-                Text("Save company")
+                Text(if (busy) "Saving…" else "Save company")
             }
         }
     }

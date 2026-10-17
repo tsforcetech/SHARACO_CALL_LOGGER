@@ -60,10 +60,11 @@ export const maintenance = onSchedule(
           .add({ title, body, timestamp: Date.now() });
         await ds.ref.update({ lastAlertAt: Date.now() });
         const user = (await db.doc(`users/${c.ownerId}`).get()).data();
-        if (user?.fcmToken) {
+        if (user?.fcmFid) {
           try {
             await getMessaging().send({
-              token: user.fcmToken,
+              // Admin SDK 13 token field accepts registered FIDs during the FCM migration.
+              token: user.fcmFid,
               data: { title, body, recipientUid: c.ownerId },
             });
           } catch (e) {

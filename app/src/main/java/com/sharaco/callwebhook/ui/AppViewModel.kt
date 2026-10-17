@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.installations.FirebaseInstallations
 import com.google.firebase.messaging.FirebaseMessaging
 import com.sharaco.callwebhook.BuildConfig
 import com.sharaco.callwebhook.data.*
@@ -204,9 +205,10 @@ constructor(
         if (config.company == s.companyId && config.uid == s.uid) SyncWork.schedule(context)
         viewModelScope.launch {
             try {
+                FirebaseMessaging.getInstance().register().await()
                 backend.call(
                     "saveNotificationToken",
-                    mapOf("token" to FirebaseMessaging.getInstance().token.await()),
+                    mapOf("fid" to FirebaseInstallations.getInstance().id.await()),
                 )
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -294,9 +296,10 @@ constructor(
         }
     }
 
-    fun createCompany(values: Row) = task {
+    fun createCompany(values: Row, done: () -> Unit = {}) = task {
         backend.call("createCompany", values)
         loadSession()
+        done()
     }
 
     fun inspectInvite(token: String) = task {

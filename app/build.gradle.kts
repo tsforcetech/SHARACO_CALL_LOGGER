@@ -65,6 +65,7 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-functions")
     implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-installations")
     implementation("com.google.firebase:firebase-crashlytics")
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
     debugImplementation("com.google.firebase:firebase-appcheck-debug")

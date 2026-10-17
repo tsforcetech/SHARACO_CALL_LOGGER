@@ -10,7 +10,7 @@ Invitation tokens contain 192 bits of randomness. Only the SHA-256 hash is store
 
 | Path | Purpose |
 |---|---|
-| `users/{uid}` | Current company link and notification token |
+| `users/{uid}` | Current company link and registered FCM installation ID |
 | `companies/{cid}` | Owner, profile, timezone, settings and status |
 | `companies/{cid}/members/{uid}` | Role, status, consent, monitoring boundary, primary device |
 | `companies/{cid}/employees/{id}` | Staff profile and invitation state, including unjoined staff |

@@ -16,6 +16,19 @@ import com.sharaco.callwebhook.MainActivity
 import com.sharaco.callwebhook.R
 
 class MessagingService : FirebaseMessagingService() {
+    override fun onRegistered(installationId: String) {
+        if (FirebaseAuth.getInstance().currentUser == null) return
+        com.google.firebase.functions.FirebaseFunctions.getInstance("europe-west1")
+            .getHttpsCallable("saveNotificationToken")
+            .call(mapOf("fid" to installationId))
+            .addOnFailureListener {
+                android.util.Log.w(
+                    "CallTrack",
+                    "Notification registration will retry on next launch",
+                )
+            }
+    }
+
     override fun onMessageReceived(message: RemoteMessage) {
         if (message.data["recipientUid"] != FirebaseAuth.getInstance().currentUser?.uid) return
         if (

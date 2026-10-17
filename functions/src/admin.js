@@ -394,6 +394,9 @@ export const requestDeletion = callable(async (r, d) => {
 export const saveNotificationToken = callable(async (r, d) => {
   await db
     .doc(`users/${r.auth.uid}`)
-    .set({ fcmToken: text(d.token, 4096) }, { merge: true });
+    .set(
+      { fcmFid: text(d.fid, 128), notificationRegisteredAt: Date.now() },
+      { merge: true },
+    );
   return { ok: true };
 });
