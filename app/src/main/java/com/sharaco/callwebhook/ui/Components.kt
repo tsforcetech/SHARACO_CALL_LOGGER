@@ -1,0 +1,106 @@
+package com.sharaco.callwebhook.ui
+
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.sharaco.callwebhook.domain.*
+
+@Composable fun AppTheme(mode: String, content: @Composable () -> Unit) {
+    val dark = mode == "DARK" || (mode == "SYSTEM" && isSystemInDarkTheme())
+    val colors = if (dark) darkColorScheme(primary = Color(0xFFB6BFFF), background = Color(0xFF10131D), surface = Color(0xFF181C28), secondary = Color(0xFF86D6BC))
+    else lightColorScheme(primary = Color(0xFF4154D8), background = Color(0xFFF5F6FA), surface = Color.White, secondary = Color(0xFF156E56))
+    MaterialTheme(colorScheme = colors, shapes = Shapes(medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(24.dp)), content = content)
+}
+@Composable fun Page(title: String, subtitle: String = "", content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        if (subtitle.isNotEmpty()) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        content(); Spacer(Modifier.height(16.dp))
+    }
+}
+@Composable fun Panel(title: String = "", content: @Composable ColumnScope.() -> Unit) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (title.isNotEmpty()) Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            content()
+        }
+    }
+}
+@Composable fun Hint(text: String, problem: Boolean = false) {
+    Surface(color = if (problem) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(12.dp)) {
+        Text(text, Modifier.fillMaxWidth().padding(12.dp), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+@Composable fun Field(label: String, value: String, change: (String) -> Unit, enabled: Boolean = true) {
+    OutlinedTextField(value, change, Modifier.fillMaxWidth(), label = { Text(label) }, singleLine = true, enabled = enabled)
+}
+@Composable fun Choices(values: List<String>, selected: String, change: (String) -> Unit) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        values.forEach { FilterChip(selected == it, { change(it) }, label = { Text(it.replace('_', ' ')) }) }
+    }
+}
+@Composable fun Confirm(title: String, message: String, word: String, close: () -> Unit, confirm: () -> Unit) {
+    var input by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = close, title = { Text(title) }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text(message); Field("Type $word", input, { input = it }) }
+    }, confirmButton = { TextButton({ confirm(); close() }, enabled = input == word) { Text("Confirm") } }, dismissButton = { TextButton(close) { Text("Cancel") } })
+}
+@Composable fun Metrics(metrics: Row, click: (String) -> Unit) {
+    val items = listOf("total" to "Total calls", "outgoing" to "Outgoing", "incoming" to "Incoming", "connected" to "Connected", "missed" to "Missed", "talk" to "Talk time", "average" to "Avg. connected", "unique" to "Unique numbers")
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.chunked(2).forEach { pair -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            pair.forEach { (key, label) ->
+                Card(onClick = { click(key) }, modifier = Modifier.weight(1f).height(104.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        Text(if (key in listOf("talk", "average")) duration(metrics.num(key)) else number(metrics.num(key)), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        } }
+    }
+}
+data class TableColumn(val label: String, val key: String, val format: (Row) -> String)
+@Composable fun DataTable(rows: List<Row>, first: TableColumn, columns: List<TableColumn>, click: (Row) -> Unit) {
+    var sort by remember { mutableStateOf("") }
+    var descending by remember { mutableStateOf(true) }
+    val sorted = remember(rows, sort, descending) {
+        val data = if (sort.isBlank()) rows else rows.sortedWith { a, b ->
+            val av = a[sort]; val bv = b[sort]
+            if (av is Number && bv is Number) av.toDouble().compareTo(bv.toDouble()) else av.toString().compareTo(bv.toString(), true)
+        }
+        if (sort.isNotBlank() && descending) data.reversed() else data
+    }
+    fun sortBy(key: String) { if (sort == key) descending = !descending else { sort = key; descending = true } }
+    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface) {
+        Row(Modifier.fillMaxWidth()) {
+            Column(Modifier.width(144.dp)) {
+                TableCell(first.label + if (sort == first.key) " ↕" else "", true) { sortBy(first.key) }
+                sorted.forEach { row -> TableCell(first.format(row)) { click(row) } }
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState())) {
+                columns.forEach { column -> Column(Modifier.width(116.dp)) {
+                    TableCell(column.label + if (sort == column.key) " ↕" else "", true) { sortBy(column.key) }
+                    sorted.forEach { row -> TableCell(column.format(row)) { click(row) } }
+                } }
+            }
+        }
+    }
+}
+@Composable private fun TableCell(text: String, header: Boolean = false, click: () -> Unit) {
+    Column(Modifier.height(60.dp).fillMaxWidth().clickable(onClick = click).background(if (header) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface)) {
+        Box(Modifier.weight(1f).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+            Text(text, maxLines = 2, overflow = TextOverflow.Ellipsis, style = if (header) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodySmall, fontWeight = if (header) FontWeight.Bold else FontWeight.Normal)
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .4f))
+    }
+}
