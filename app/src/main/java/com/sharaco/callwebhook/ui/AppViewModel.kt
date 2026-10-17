@@ -6,8 +6,6 @@ import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.installations.FirebaseInstallations
-import com.google.firebase.messaging.FirebaseMessaging
 import com.sharaco.callwebhook.BuildConfig
 import com.sharaco.callwebhook.data.*
 import com.sharaco.callwebhook.domain.*
@@ -19,7 +17,6 @@ import java.time.ZoneId
 import javax.inject.Inject
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.tasks.await
 
 data class AppState(
     val session: Session? = null,
@@ -46,6 +43,7 @@ data class AppState(
     val pending: Int = 0,
     val invite: Row = emptyMap(),
     val preview: Row = emptyMap(),
+    val joinRequests: List<Row> = emptyList(),
     val permission: Boolean = false,
     val notificationPermission: Boolean = false,
     val syncPhase: String = "Ready",
@@ -89,17 +87,18 @@ constructor(
         reload()
     }
 
-    private fun task(block: suspend () -> Unit): Job = viewModelScope.launch {
-        mutable.update { it.copy(busy = it.busy + 1) }
-        try {
-            block()
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            mutable.update { it.copy(error = humanError(e)) }
-        } finally {
-            mutable.update { it.copy(busy = (it.busy - 1).coerceAtLeast(0), loading = false) }
+    private fun task(block: suspend () -> Unit): Job =
+        viewModelScope.launch {
+            mutable.update { it.copy(busy = it.busy + 1) }
+            try {
+                block()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                mutable.update { it.copy(error = humanError(e)) }
+            } finally {
+                mutable.update { it.copy(busy = (it.busy - 1).coerceAtLeast(0), loading = false) }
+            }
         }
-    }
 
     fun message(value: String) {
         mutable.update { it.copy(error = value) }
@@ -181,21 +180,32 @@ constructor(
             )
         }
         permissionsChanged()
-        if (s == null || s.companyId.isBlank()) return
+        if (s == null) return
+        if (s.companyId.isBlank()) {
+            if (s.pendingCompanyId.isNotBlank())
+                listeners +=
+                    backend.firestore
+                        .document("users/${s.uid}/companies/${s.pendingCompanyId}")
+                        .addSnapshotListener { snap, error ->
+                            if (error != null) message(humanError(error))
+                            else if (snap?.getString("status") == "approved") reload()
+                        }
+            return
+        }
         watchLocal(s)
         pendingJob?.cancel()
-        pendingJob = viewModelScope.launch {
-            dao.observePending(s.scope).collect { count ->
-                mutable.update { it.copy(pending = count) }
+        pendingJob =
+            viewModelScope.launch {
+                dao.observePending(s.scope).collect { count ->
+                    mutable.update { it.copy(pending = count) }
+                }
             }
-        }
         val collections = buildList {
             add("devices")
             if (s.manager) {
                 add("employees")
-                add("notifications")
+                add("join_requests")
             }
-            if (s.role == "OWNER") add("audit")
         }
         collections.forEach { collection ->
             listeners +=
@@ -206,6 +216,11 @@ constructor(
                             when (collection) {
                                 "devices" -> it.copy(devices = rows)
                                 "employees" -> it.copy(employees = rows)
+                                "join_requests" ->
+                                    it.copy(
+                                        joinRequests =
+                                            rows.filter { r -> r.str("status") == "pending" }
+                                    )
                                 "audit" -> it.copy(audit = rows)
                                 else -> it.copy(notifications = rows)
                             }
@@ -219,7 +234,7 @@ constructor(
                     if (error != null) message(humanError(error))
                     else if (snap != null) {
                         val current = snap.data.orEmpty()
-                        if (current.str("status") != "ACTIVE") {
+                        if (!current.flag("approved")) {
                             task {
                                 SyncWork.cancel(context)
                                 reportJob?.cancel()
@@ -237,7 +252,8 @@ constructor(
                                     )
                                 }
                             }
-                        } else if (current.str("role") != mutable.value.session?.role) reload()
+                        } else if (current.str("role").uppercase() != mutable.value.session?.role)
+                            reload()
                         else
                             mutable.update { it.copy(session = it.session?.copy(member = current)) }
                     }
@@ -245,27 +261,16 @@ constructor(
         refreshReport()
         loadCalls()
         if (config.company == s.companyId && config.uid == s.uid) SyncWork.schedule(context)
-        viewModelScope.launch {
-            try {
-                FirebaseMessaging.getInstance().register().await()
-                backend.call(
-                    "saveNotificationToken",
-                    mapOf("fid" to FirebaseInstallations.getInstance().id.await()),
-                )
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                android.util.Log.w("CallTrack", "Notification token registration unavailable")
-            }
-        }
     }
 
     private fun watchLocal(s: Session) {
         localJob?.cancel()
-        localJob = viewModelScope.launch {
-            dao.observe(s.scope, mutable.value.localLimit).collect { rows ->
-                mutable.update { it.copy(local = rows) }
+        localJob =
+            viewModelScope.launch {
+                dao.observe(s.scope, mutable.value.localLimit).collect { rows ->
+                    mutable.update { it.copy(local = rows) }
+                }
             }
-        }
     }
 
     fun moreLocal() {
@@ -345,17 +350,25 @@ constructor(
     }
 
     fun inspectInvite(token: String) = task {
+        mutable.update { it.copy(preview = emptyMap()) }
         val p = backend.call("inspectInvite", mapOf("token" to token))
-        mutable.update { it.copy(preview = p + ("token" to token)) }
+        mutable.update { it.copy(preview = p) }
     }
 
     fun join(token: String) = task {
         backend.call("joinCompany", mapOf("token" to token, "consent" to true))
+        clearPreview()
         loadSession()
     }
 
     fun clearPreview() {
         mutable.update { it.copy(preview = emptyMap()) }
+    }
+
+    fun approveJoin(uid: String) = task {
+        val s = mutable.value.session ?: return@task
+        backend.call("approveJoin", mapOf("companyId" to s.companyId, "uid" to uid))
+        message("Employee approved. They can now open the company dashboard.")
     }
 
     fun saveEmployee(values: Row, done: () -> Unit) = task {

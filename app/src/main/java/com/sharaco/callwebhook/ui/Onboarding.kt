@@ -261,6 +261,18 @@ fun WorkspaceRecovery(state: AppState, model: AppViewModel) {
 
 @Composable
 fun WorkspaceScreen(state: AppState, model: AppViewModel) {
+    if (state.session?.pendingCompanyId?.isNotBlank() == true) {
+        Page("Approval pending", state.session.pendingCompanyName) {
+            Panel("Request sent") {
+                Text(
+                    "Your administrator must approve your join request before you can access company data. This screen updates when approval arrives."
+                )
+                Button({ model.reload() }, enabled = state.busy == 0) { Text("Check approval") }
+                TextButton({ model.signOut() }) { Text("Sign out") }
+            }
+        }
+        return
+    }
     var create by remember { mutableStateOf(false) }
     var token by remember { mutableStateOf("") }
     var consent by remember { mutableStateOf(false) }
@@ -275,7 +287,7 @@ fun WorkspaceScreen(state: AppState, model: AppViewModel) {
         Button({ create = true }, Modifier.fillMaxWidth()) { Text("Create company") }
         Panel("Join your team") {
             Field(
-                "Invitation code",
+                "Invitation code · all 32 characters",
                 token,
                 {
                     token = it
@@ -315,7 +327,7 @@ fun WorkspaceScreen(state: AppState, model: AppViewModel) {
                     { model.join(state.preview.str("token")) },
                     enabled = consent && state.busy == 0,
                 ) {
-                    Text("Join company")
+                    Text("Request to join")
                 }
             }
         }

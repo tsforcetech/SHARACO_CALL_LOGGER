@@ -78,15 +78,17 @@ data class Session(
     val companyId: String = "",
     val company: Row = emptyMap(),
     val member: Row = emptyMap(),
+    val pendingCompanyId: String = "",
+    val pendingCompanyName: String = "",
 ) {
     val role
-        get() = member.str("role")
+        get() = member.str("role").uppercase(Locale.ROOT)
 
     val manager
         get() = role in listOf("OWNER", "ADMIN")
 
     val canManage
-        get() = role == "OWNER" || (role == "ADMIN" && member.flag("manageEmployees"))
+        get() = role in listOf("OWNER", "ADMIN")
 
     val zone
         get() = company.str("timeZone").ifBlank { "Asia/Dubai" }

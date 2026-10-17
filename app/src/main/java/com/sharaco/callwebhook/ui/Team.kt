@@ -29,6 +29,16 @@ fun TeamScreen(state: AppState, model: AppViewModel, navigate: (String) -> Unit)
         query = search
     }
     Page("Your team", "Employees, invitations and current device health") {
+        if (s.canManage && state.joinRequests.isNotEmpty())
+            Panel("Pending join requests") {
+                state.joinRequests.forEach { request ->
+                    Text(request.str("name"), style = MaterialTheme.typography.titleSmall)
+                    Text(request.str("email"))
+                    Button({ model.approveJoin(request.str("uid")) }, enabled = state.busy == 0) {
+                        Text("Approve employee")
+                    }
+                }
+            }
         Field("Search name, staff code, mobile or email", search, { search = it })
         Choices(
             listOf("ALL", "INVITED", "ACTIVE", "INACTIVE", "SUSPENDED", "REMOVED"),
@@ -57,8 +67,7 @@ fun TeamScreen(state: AppState, model: AppViewModel, navigate: (String) -> Unit)
             Card(
                 onClick = { selected = employee },
                 modifier = Modifier.fillMaxWidth(),
-                colors =
-                    CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(employee.str("name"), style = MaterialTheme.typography.titleMedium)
@@ -206,7 +215,7 @@ fun EmployeeForm(employee: Row, close: () -> Unit, busy: Boolean = false, save: 
         listOf(
             "name" to "Employee name",
             "code" to "Staff code",
-            "email" to "Google email · optional",
+            "email" to "Google email · required",
             "mobile" to "Mobile",
             "department" to "Department",
             "designation" to "Designation",
@@ -232,14 +241,17 @@ fun EmployeeForm(employee: Row, close: () -> Unit, busy: Boolean = false, save: 
                 Field(label, values[key].orEmpty(), { values[key] = it })
             }
             Text(
-                "If supplied, the employee must join using this exact Google email.",
+                "Only this verified Google account can use the invitation. Administrator approval is required after joining.",
                 style = MaterialTheme.typography.bodySmall,
             )
             Button(
                 { save(values.toMap() + ("employeeId" to employee.str("id"))) },
                 Modifier.fillMaxWidth(),
                 enabled =
-                    !busy && !values["name"].isNullOrBlank() && !values["code"].isNullOrBlank(),
+                    !busy &&
+                        !values["name"].isNullOrBlank() &&
+                        !values["code"].isNullOrBlank() &&
+                        values["email"].orEmpty().contains("@"),
             ) {
                 Text("Save employee")
             }
@@ -258,8 +270,7 @@ fun InvitationDialog(invite: Row, zone: String, close: () -> Unit) {
                 for (x in 0 until 480) for (y in 0 until 480) setPixel(
                     x,
                     y,
-                    if (matrix[x, y]) android.graphics.Color.BLACK
-                    else android.graphics.Color.WHITE,
+                    if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE,
                 )
             }
         }
@@ -281,7 +292,7 @@ fun InvitationDialog(invite: Row, zone: String, close: () -> Unit) {
                     Text(token, style = MaterialTheme.typography.bodySmall)
                 }
                 Text(
-                    "Expires ${dateTime(invite.num("expiresAt"), zone)}. Single use. Regenerating revokes this invitation."
+                    "Expires ${dateTime(invite.num("expiresAt"), zone)}. Single use, bound to ${invite.str("email")}. Joining submits a request; an administrator must approve access. Regenerating revokes the old code."
                 )
             }
         },

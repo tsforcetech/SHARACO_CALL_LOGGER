@@ -2,14 +2,20 @@
 
 A native Android application for transparent business call-metadata monitoring, employee onboarding and company reporting. Kotlin, Jetpack Compose Material 3, Hilt, Room, DataStore, WorkManager and Firebase.
 
+## Current release: 4.1.0 Spark onboarding correction
+
+The complete Kotlin source replaces the old Java app on `main`. Company creation, employee invitations, join requests, administrator approval and dashboard reads now use direct Firestore with the legacy field names. **Publish the new rules and indexes before installing**; GitHub does not deploy Firebase automatically. See [Spark onboarding, callable audit and acceptance instructions](docs/SPARK-ONBOARDING.md). Google authentication and Firebase client configuration are preserved.
+
+This is not a complete conversion of every feature to Spark: device registration/call upload, advanced employee actions, company settings edits, deletion/leave and notification registration still require the original server operations. The older architecture/deployment sections below describe that server design and must not be interpreted as instructions to enable billing or blindly deploy Functions with the Spark schema.
+
 ## Existing configuration preserved
 
 - Application ID: `com.sharaco.callwebhook`
 - Firebase project: `sharaco-call-logger`
 - `app/google-services.json` is preserved byte-for-byte from the original project.
-- Version: `4.0.2` / code `102`, above the original version code `31`.
+- Version: `4.1.0` / code `103`, above the original version code `31`.
 - Existing GitHub signing secrets remain in repository settings. The release workflow references `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. No secret values are copied into source.
-- The old implementation remains in Git history and on `main` until this rebuild is merged. This branch does not delete existing cloud data or deploy Firebase automatically.
+- The old Java implementation remains recoverable in Git history. This source update does not delete existing cloud data or deploy Firebase automatically.
 
 ## Build
 
@@ -126,4 +132,4 @@ The signed APK artifact includes `signing-fingerprints.txt`. Check this against 
 
 Some Google credential providers return a cancellation after account selection because consent or provider setup did not complete. Version 4.0.1 discarded this result silently. Version 4.0.2 displays it immediately, offers an explicit second Credential Manager account-selector flow (all accounts, auto-select disabled), shows the authentication stage, and bounds provider/network waits. It never retries cancelled consent automatically. The live Google provider authorization-URI endpoint accepted the preserved client configuration on 17 October 2026; this does not prove successful authentication on a particular device.
 
-The no-billing Spark architecture revision remains outstanding; this APK still contains Cloud Functions-dependent workspace operations. Do not treat the chooser recovery change as a Spark conversion.
+The 4.1.0 correction converts onboarding and dashboard reads to Spark, as documented at the top. Other server operations remain outstanding.

@@ -24,7 +24,20 @@ jobs:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
       - name: Install SDK
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"'
-      - run: gradle :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --no-daemon --stacktrace
+      - name: Build debug APK and test
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            export SIGNING_KEYSTORE_PATH="$RUNNER_TEMP/calltrack-debug.jks"
+            trap 'rm -f "$SIGNING_KEYSTORE_PATH"' EXIT
+            printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' | base64 --decode > "$SIGNING_KEYSTORE_PATH"
+          fi
+          gradle :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --no-daemon --stacktrace
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk > debug-signing-fingerprints.txt
       - name: Render native UI previews
         run: gradle :app:updateDebugScreenshotTest --no-daemon --max-workers=2
       - uses: actions/upload-artifact@v4
@@ -35,7 +48,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: CallTrack-Pro-debug
-          path: app/build/outputs/apk/debug/*.apk
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            debug-signing-fingerprints.txt
           if-no-files-found: error
   backend:
     runs-on: ubuntu-latest
@@ -50,4 +65,4 @@ jobs:
           java-version: '21'
       - run: npm ci --prefix functions
       - run: npm test --prefix functions
-      - run: npx --yes firebase-tools@14.12.0 emulators:exec --project demo-calltrack --only firestore 'cd functions && npm run test:rules && npm run test:integration'
+      - run: npx --yes firebase-tools@14.12.0 emulators:exec --project demo-calltrack --only firestore 'cd functions && node --test test/spark.test.js && npm run test:integration'

@@ -15,8 +15,8 @@ android {
         applicationId = "com.sharaco.callwebhook"
         minSdk = 26
         targetSdk = 37
-        versionCode = 102
-        versionName = "4.0.2"
+        versionCode = 103
+        versionName = "4.1.0"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
@@ -32,6 +32,8 @@ android {
             keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
         }
         buildTypes.getByName("release") { signingConfig = signingConfigs.getByName("production") }
+        // Keep OAuth identity stable for the requested debug APK as well.
+        buildTypes.getByName("debug") { signingConfig = signingConfigs.getByName("production") }
     }
     buildTypes.getByName("release") {
         isMinifyEnabled = true

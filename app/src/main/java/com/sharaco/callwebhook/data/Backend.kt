@@ -19,30 +19,40 @@ constructor(
     val auth: FirebaseAuth,
     val firestore: FirebaseFirestore,
     private val functions: FirebaseFunctions,
+    private val spark: SparkWorkspace,
 ) {
     @Suppress("UNCHECKED_CAST")
     suspend fun call(name: String, data: Row = emptyMap()): Row =
-        functions
-            .getHttpsCallable(name)
-            .apply { setTimeout(130, TimeUnit.SECONDS) }
-            .call(data)
-            .await()
-            .data as? Row ?: emptyMap()
+        try {
+            when (name) {
+                "createCompany" -> spark.createCompany(data)
+                "saveEmployee" -> spark.saveEmployee(data)
+                "createInvite" -> spark.createInvite(data)
+                "inspectInvite" -> spark.inspectInvite(data.str("token"))
+                "joinCompany" -> spark.join(data.str("token"))
+                "revokeInvite" -> spark.revoke(data)
+                "approveJoin" -> {
+                    spark.approve(data.str("companyId"), data.str("uid"))
+                    emptyMap()
+                }
+                "getReport" -> spark.report(data)
+                "listCalls" -> mapOf("calls" to spark.calls(data), "hasMore" to false)
+                else ->
+                    functions
+                        .getHttpsCallable(name)
+                        .apply { setTimeout(130, TimeUnit.SECONDS) }
+                        .call(data)
+                        .await()
+                        .data as? Row ?: emptyMap()
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            android.util.Log.e("CallTrackBackend", "$name failed: ${backendErrorCode(e)}")
+            throw BackendOperationException(name, e)
+        }
 
     suspend fun session(): Session? {
-        val user = auth.currentUser ?: return null
-        val cid =
-            firestore.document("users/${user.uid}").get().await().data?.get("companyId") as? String
-                ?: ""
-        if (cid.isBlank()) return Session(user.uid)
-        val member =
-            firestore.document("companies/$cid/members/${user.uid}").get().await().data.orEmpty()
-        check(member.str("status") == "ACTIVE") {
-            "Your company access is inactive. Contact your company owner."
-        }
-        val company = firestore.document("companies/$cid").get().await().data.orEmpty()
-        check(company.str("status") == "ACTIVE") { "Your company is unavailable." }
-        return Session(user.uid, cid, company, member)
+        return spark.session()
     }
 
     fun watch(
@@ -52,7 +62,7 @@ constructor(
     ): ListenerRegistration {
         var query = firestore.collection("companies/${session.companyId}/$collection").limit(1000)
         if (!session.manager && collection == "devices")
-            query = query.whereEqualTo("employeeUid", session.uid)
+            query = query.whereEqualTo("uid", session.uid)
         if (collection in listOf("audit", "notifications"))
             query =
                 query
@@ -64,33 +74,47 @@ constructor(
     }
 }
 
+class BackendOperationException(val operation: String, cause: Throwable) : Exception(cause)
+
+fun backendErrorCode(error: Throwable): String =
+    when (error) {
+        is BackendOperationException -> backendErrorCode(error.cause ?: error)
+        is FirebaseFirestoreException -> "FIRESTORE_${error.code.name}"
+        is FirebaseFunctionsException -> "FUNCTIONS_${error.code.name}"
+        else -> error.javaClass.simpleName
+    }
+
 fun humanError(error: Throwable): String =
     when (error) {
+        is BackendOperationException ->
+            "${error.operation}: ${humanError(error.cause ?: Exception())} [${backendErrorCode(error)}]"
         is FirebaseFirestoreException ->
-            when (error.code) {
-                FirebaseFirestoreException.Code.PERMISSION_DENIED ->
-                    "Your account is signed in, but workspace access was denied. Ask your administrator to check your membership, deployed Firestore rules and App Check configuration."
-                FirebaseFirestoreException.Code.UNAUTHENTICATED ->
-                    "Your session could not be verified. Sign out and sign in again."
-                FirebaseFirestoreException.Code.UNAVAILABLE,
-                FirebaseFirestoreException.Code.DEADLINE_EXCEEDED ->
-                    "Your workspace is temporarily unreachable. Check your connection and retry."
-                else ->
-                    "Workspace request failed (${error.code}). Retry or share this code with your administrator."
-            }
+            "[FIRESTORE_${error.code.name}] " +
+                when (error.code) {
+                    FirebaseFirestoreException.Code.PERMISSION_DENIED ->
+                        "Your account is signed in, but workspace access was denied. Ask your administrator to check your membership, deployed Firestore rules and App Check configuration."
+                    FirebaseFirestoreException.Code.UNAUTHENTICATED ->
+                        "Your session could not be verified. Sign out and sign in again."
+                    FirebaseFirestoreException.Code.UNAVAILABLE,
+                    FirebaseFirestoreException.Code.DEADLINE_EXCEEDED ->
+                        "Your workspace is temporarily unreachable. Check your connection and retry."
+                    else ->
+                        "Workspace request failed (${error.code}). Retry or share this code with your administrator."
+                }
         is FirebaseFunctionsException ->
-            when (error.code) {
-                FirebaseFunctionsException.Code.UNAVAILABLE,
-                FirebaseFunctionsException.Code.DEADLINE_EXCEEDED ->
-                    "Unable to connect. Pending calls are saved on this device; retry when online."
-                FirebaseFunctionsException.Code.UNAUTHENTICATED ->
-                    "Your session or device could not be verified. Sign in again; if it persists, ask your administrator to check App Check for this APK."
-                FirebaseFunctionsException.Code.NOT_FOUND ->
-                    "This feature is not available on the server yet. Ask your administrator to deploy the CallTrack backend to the configured Firebase project."
-                else ->
-                    error.message?.substringBefore("\n")
-                        ?: "Unable to complete this action. Please retry."
-            }
+            "[FUNCTIONS_${error.code.name}] " +
+                when (error.code) {
+                    FirebaseFunctionsException.Code.UNAVAILABLE,
+                    FirebaseFunctionsException.Code.DEADLINE_EXCEEDED ->
+                        "Unable to connect. Pending calls are saved on this device; retry when online."
+                    FirebaseFunctionsException.Code.UNAUTHENTICATED ->
+                        "Your session or device could not be verified. Sign in again; if it persists, ask your administrator to check App Check for this APK."
+                    FirebaseFunctionsException.Code.NOT_FOUND ->
+                        "Callable endpoint was not found in sharaco-call-logger / europe-west1. This operation still requires a deployed backend."
+                    else ->
+                        error.message?.substringBefore("\n")
+                            ?: "Unable to complete this action. Please retry."
+                }
         is java.io.IOException -> "Unable to connect. Check your internet connection."
         is IllegalStateException,
         is IllegalArgumentException -> error.message ?: "Please check the information and retry."
