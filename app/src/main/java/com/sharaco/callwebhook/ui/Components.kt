@@ -14,11 +14,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.sharaco.callwebhook.domain.*
 
 @Composable
@@ -27,21 +29,71 @@ fun AppTheme(mode: String, content: @Composable () -> Unit) {
     val colors =
         if (dark)
             darkColorScheme(
-                primary = Color(0xFFB6BFFF),
+                primary = Color(0xFFC4BEFF),
+                primaryContainer = Color(0xFF352C70),
+                onPrimaryContainer = Color(0xFFEAE7FF),
+                surfaceContainer = Color(0xFF181C28),
+                secondaryContainer = Color(0xFF243B36),
                 background = Color(0xFF10131D),
                 surface = Color(0xFF181C28),
                 secondary = Color(0xFF86D6BC),
             )
         else
             lightColorScheme(
-                primary = Color(0xFF4154D8),
-                background = Color(0xFFF5F6FA),
+                primary = Color(0xFF5145E8),
+                primaryContainer = Color(0xFFEEECFF),
+                onPrimaryContainer = Color(0xFF5145D9),
+                onBackground = Color(0xFF15213C),
+                onSurface = Color(0xFF15213C),
+                onSurfaceVariant = Color(0xFF6E7A91),
+                outlineVariant = Color(0xFFEDF0F6),
+                surfaceContainer = Color.White,
+                secondaryContainer = Color(0xFFE7F8EF),
+                background = Color(0xFFF6F8FC),
                 surface = Color.White,
                 secondary = Color(0xFF156E56),
             )
     MaterialTheme(
         colorScheme = colors,
-        shapes = Shapes(medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(24.dp)),
+        shapes =
+            Shapes(
+                small = RoundedCornerShape(11.dp),
+                medium = RoundedCornerShape(15.dp),
+                large = RoundedCornerShape(20.dp),
+                extraLarge = RoundedCornerShape(24.dp),
+            ),
+        typography =
+            Typography(
+                headlineSmall =
+                    androidx.compose.ui.text.TextStyle(
+                        fontSize = 26.sp,
+                        lineHeight = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.7).sp,
+                    ),
+                titleLarge =
+                    androidx.compose.ui.text.TextStyle(
+                        fontSize = 22.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                titleMedium =
+                    androidx.compose.ui.text.TextStyle(
+                        fontSize = 16.sp,
+                        lineHeight = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                bodyMedium =
+                    androidx.compose.ui.text.TextStyle(fontSize = 13.sp, lineHeight = 20.sp),
+                bodySmall =
+                    androidx.compose.ui.text.TextStyle(fontSize = 12.sp, lineHeight = 18.sp),
+                labelMedium =
+                    androidx.compose.ui.text.TextStyle(
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                    ),
+            ),
         content = content,
     )
 }
@@ -54,13 +106,19 @@ fun Page(title: String, subtitle: String = "", content: @Composable ColumnScope.
             .padding(horizontal = 20.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        if (subtitle.isNotEmpty())
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                title,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
             )
+            if (subtitle.isNotEmpty())
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+        }
         content()
         Spacer(Modifier.height(16.dp))
     }
@@ -71,6 +129,7 @@ fun Panel(title: String = "", content: @Composable ColumnScope.() -> Unit) {
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (title.isNotEmpty())
@@ -164,33 +223,29 @@ fun Metrics(metrics: Row, click: (String) -> Unit) {
             "average" to "Avg. connected",
             "unique" to "Unique numbers",
         )
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         items.chunked(2).forEach { pair ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 pair.forEach { (key, label) ->
                     Card(
                         onClick = { click(key) },
-                        modifier = Modifier.weight(1f).heightIn(min = 116.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 126.dp),
                         colors =
                             CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surface
                             ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     ) {
                         Column(
                             Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.SpaceBetween,
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
+                            Surface(
+                                color =
+                                    if (key == "missed") MaterialTheme.colorScheme.errorContainer
+                                    else MaterialTheme.colorScheme.primaryContainer,
+                                shape = RoundedCornerShape(10.dp),
                             ) {
-                                Text(
-                                    label,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.weight(1f),
-                                )
                                 Icon(
                                     when (key) {
                                         "outgoing" -> Icons.AutoMirrored.Filled.CallMade
@@ -203,28 +258,81 @@ fun Metrics(metrics: Row, click: (String) -> Unit) {
                                         else -> Icons.Default.Call
                                     },
                                     null,
-                                    Modifier.size(18.dp),
+                                    Modifier.padding(7.dp).size(18.dp),
                                     tint =
                                         if (key == "missed") MaterialTheme.colorScheme.error
                                         else MaterialTheme.colorScheme.primary,
                                 )
                             }
-                            Spacer(Modifier.height(8.dp))
                             Text(
                                 if (key in listOf("talk", "average")) duration(metrics.num(key))
                                 else number(metrics.num(key)),
                                 style =
-                                    MaterialTheme.typography.headlineMedium.copy(
+                                    MaterialTheme.typography.titleLarge.copy(
                                         fontFeatureSettings = "tnum"
                                     ),
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SummaryHero(label: String, value: String, caption: String, badge: String = "") {
+    Box(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(23.dp))
+            .background(Brush.linearGradient(listOf(Color(0xFF5F52ED), Color(0xFF3831A9))))
+    ) {
+        androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+            drawCircle(
+                Color.White.copy(alpha = 0.06f),
+                radius = 85.dp.toPx(),
+                center = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(26.dp.toPx()),
+            )
+        }
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    label,
+                    Modifier.weight(1f),
+                    color = Color.White.copy(alpha = .82f),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                if (badge.isNotEmpty())
+                    Surface(
+                        color = Color.White.copy(alpha = .15f),
+                        shape = RoundedCornerShape(20.dp),
+                    ) {
+                        Text(
+                            badge,
+                            Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+            }
+            Text(
+                value,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+            )
+            Text(
+                caption,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = .85f),
+            )
         }
     }
 }

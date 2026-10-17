@@ -54,6 +54,13 @@ fun DashboardContent(
                     Icon(Icons.Default.NotificationsNone, "Notifications")
                 }
         }
+        if (state.report.isNotEmpty())
+            SummaryHero(
+                if (s.manager) "Company call summary" else "Personal call summary",
+                "${number(state.report.row("metrics").num("total"))} calls",
+                "${state.filters.start} · ${s.zone}",
+                "Selected period",
+            )
         ReportFilters(state, onFilters)
         if (!s.manager && !state.permission)
             Hint("Call history access disabled. Open Sync to enable permission.", true)
@@ -82,7 +89,7 @@ fun DashboardContent(
                 )
                 navigate("calls")
             }
-            Panel("Call activity") { ActivityChart(state.report.rows("timeline")) }
+            Panel("Performance trends") { ActivityChart(state.report.rows("timeline")) }
             Panel("Call distribution") { Distribution(state.report.row("metrics")) }
             Panel("Connection rate") {
                 val m = state.report.row("metrics")
@@ -97,7 +104,7 @@ fun DashboardContent(
                 )
             }
             if (s.manager)
-                Panel("Staff performance") {
+                Panel("Team performance") {
                     StaffChart(state.report.rows("staff")) { row ->
                         onFilters(state.filters.copy(employees = setOf(row.str("id"))))
                         navigate("reports")

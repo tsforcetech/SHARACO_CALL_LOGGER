@@ -2,6 +2,7 @@ package com.sharaco.callwebhook.data
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
@@ -65,12 +66,27 @@ constructor(
 
 fun humanError(error: Throwable): String =
     when (error) {
+        is FirebaseFirestoreException ->
+            when (error.code) {
+                FirebaseFirestoreException.Code.PERMISSION_DENIED ->
+                    "Your account is signed in, but workspace access was denied. Ask your administrator to check your membership, deployed Firestore rules and App Check configuration."
+                FirebaseFirestoreException.Code.UNAUTHENTICATED ->
+                    "Your session could not be verified. Sign out and sign in again."
+                FirebaseFirestoreException.Code.UNAVAILABLE,
+                FirebaseFirestoreException.Code.DEADLINE_EXCEEDED ->
+                    "Your workspace is temporarily unreachable. Check your connection and retry."
+                else ->
+                    "Workspace request failed (${error.code}). Retry or share this code with your administrator."
+            }
         is FirebaseFunctionsException ->
             when (error.code) {
                 FirebaseFunctionsException.Code.UNAVAILABLE,
                 FirebaseFunctionsException.Code.DEADLINE_EXCEEDED ->
                     "Unable to connect. Pending calls are saved on this device; retry when online."
-                FirebaseFunctionsException.Code.UNAUTHENTICATED -> "Please sign in again."
+                FirebaseFunctionsException.Code.UNAUTHENTICATED ->
+                    "Your session or device could not be verified. Sign in again; if it persists, ask your administrator to check App Check for this APK."
+                FirebaseFunctionsException.Code.NOT_FOUND ->
+                    "This feature is not available on the server yet. Ask your administrator to deploy the CallTrack backend to the configured Firebase project."
                 else ->
                     error.message?.substringBefore("\n")
                         ?: "Unable to complete this action. Please retry."

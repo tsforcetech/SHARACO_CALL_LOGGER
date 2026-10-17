@@ -4,6 +4,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.sharaco.callwebhook.domain.*
@@ -41,12 +42,25 @@ fun ReportFilters(state: AppState, onFilters: (Filters) -> Unit) {
                 label = { Text(label) },
             )
         }
-        AssistChip({ open = true }, label = { Text("Filters (${f.count})") })
     }
-    Text(
-        "${f.start} — ${f.end} · ${state.session?.zone}",
-        style = MaterialTheme.typography.labelMedium,
-    )
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                if (f.start == f.end) f.start.toString() else "${f.start} — ${f.end}",
+                style = MaterialTheme.typography.labelMedium,
+            )
+            Text(
+                state.session?.zone ?: "UTC",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        OutlinedButton({ open = true }) { Text("Filters (${f.count})") }
+    }
     if (open) {
         var draft by remember { mutableStateOf(f) }
         var from by remember { mutableStateOf(f.start.toString()) }

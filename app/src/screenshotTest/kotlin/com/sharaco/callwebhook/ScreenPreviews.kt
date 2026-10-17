@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import com.android.tools.screenshot.PreviewTest
 import com.sharaco.callwebhook.domain.*
@@ -41,6 +42,13 @@ private val staff =
                 "name" to name,
                 "id" to "employee$i",
                 "total" to 92 - i * 11,
+                "outgoing" to 62 - i * 7,
+                "incoming" to 20 - i * 2,
+                "missed" to 7 - i,
+                "rejected" to 3 - i,
+                "connected" to 65 - i * 8,
+                "talk" to 10270 - i * 1264,
+                "unique" to 52 - i * 6,
                 "department" to "Sales",
                 "status" to "ACTIVE",
             )
@@ -68,9 +76,8 @@ private fun Frame(dark: Boolean, content: @Composable () -> Unit) {
     AppTheme(if (dark) "DARK" else "LIGHT") {
         Scaffold(
             bottomBar = {
-                NavigationBar {
-                    listOf("Overview", "Team", "Reports", "Calls", "More").forEachIndexed { i, title
-                        ->
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                    listOf("Home", "Team", "Reports", "Calls", "More").forEachIndexed { i, title ->
                         NavigationBarItem(
                             selected = i == 0,
                             onClick = {},
@@ -86,7 +93,13 @@ private fun Frame(dark: Boolean, content: @Composable () -> Unit) {
                                     title,
                                 )
                             },
-                            label = { Text(title) },
+                            label = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            colors =
+                                NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                ),
                         )
                     }
                 }
@@ -139,6 +152,20 @@ fun ReportsLight() {
             ) {}
             Panel("Call activity") { ActivityChart(state.report.rows("timeline")) }
             Panel("Call distribution") { Distribution(metrics) }
+        }
+    }
+}
+
+@PreviewTest
+@Preview(widthDp = 360, heightDp = 800, fontScale = 1.3f, showBackground = true)
+@Composable
+fun SignInErrorLargeText() {
+    AppTheme("LIGHT") {
+        Surface {
+            SignInContent(
+                error =
+                    "Google sign-in is not enabled for this app. Ask your administrator to enable the Google provider in Firebase Authentication."
+            ) {}
         }
     }
 }

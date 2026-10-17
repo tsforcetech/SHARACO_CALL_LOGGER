@@ -3,7 +3,10 @@ on:
   workflow_dispatch:
   push:
     branches: ['codex/calltrack-pro-rebuild']
-    paths: ['.github/workflows/build-release.yml']
+    paths: ['.github/workflows/build-release.yml', 'app/**', '*.gradle.kts', 'gradle/**', 'gradle.properties']
+concurrency:
+  group: signed-release-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -32,10 +35,15 @@ jobs:
           trap 'rm -f "$SIGNING_KEYSTORE_PATH"' EXIT
           printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' | base64 --decode > "$SIGNING_KEYSTORE_PATH"
           gradle :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+      - name: Verify APK signature and report Firebase registration
+        run: |
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk > signing-fingerprints.txt
+          python3 scripts/check-signing.py
       - uses: actions/upload-artifact@v4
         with:
           name: CallTrack-Pro-signed
           path: |
             app/build/outputs/apk/release/*.apk
             app/build/outputs/bundle/release/*.aab
+            signing-fingerprints.txt
           if-no-files-found: error

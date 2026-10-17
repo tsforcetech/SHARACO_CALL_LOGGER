@@ -26,6 +26,9 @@ data class AppState(
     val loading: Boolean = true,
     val busy: Int = 0,
     val error: String = "",
+    val authError: String = "",
+    val workspaceError: String = "",
+    val authenticatedEmail: String = "",
     val theme: String = "SYSTEM",
     val filters: Filters = Filters(),
     val report: Row = emptyMap(),
@@ -106,7 +109,16 @@ constructor(
     }
 
     fun signIn(activity: Activity) = task {
-        google.signIn(activity)
+        mutable.update { it.copy(authError = "", workspaceError = "") }
+        try {
+            google.signIn(activity)
+        } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+            return@task
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            mutable.update { it.copy(authError = signInError(e)) }
+            return@task
+        }
         loadSession()
     }
 
@@ -119,7 +131,26 @@ constructor(
         pendingJob?.cancel()
         reportJob?.cancel()
         callsJob?.cancel()
-        val s = backend.session()
+        mutable.update {
+            it.copy(
+                workspaceError = "",
+                authenticatedEmail = backend.auth.currentUser?.email.orEmpty(),
+            )
+        }
+        val s =
+            try {
+                withTimeout(25000) { backend.session() }
+            } catch (e: Exception) {
+                if (e is CancellationException && e !is TimeoutCancellationException) throw e
+                val explanation =
+                    if (e is TimeoutCancellationException)
+                        "Loading your workspace timed out. Check your connection and retry."
+                    else humanError(e)
+                mutable.update {
+                    it.copy(session = null, workspaceError = explanation, loading = false)
+                }
+                return
+            }
         val config = prefs.config(s?.uid)
         val today = LocalDate.now(ZoneId.of(s?.zone ?: "UTC"))
         mutable.update {

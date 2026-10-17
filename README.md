@@ -7,7 +7,7 @@ A native Android application for transparent business call-metadata monitoring, 
 - Application ID: `com.sharaco.callwebhook`
 - Firebase project: `sharaco-call-logger`
 - `app/google-services.json` is preserved byte-for-byte from the original project.
-- Version: `4.0.0` / code `100`, above the original version code `31`.
+- Version: `4.0.1` / code `101`, above the original version code `31`.
 - Existing GitHub signing secrets remain in repository settings. The release workflow references `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. No secret values are copied into source.
 - The old implementation remains in Git history and on `main` until this rebuild is merged. This branch does not delete existing cloud data or deploy Firebase automatically.
 
@@ -113,3 +113,11 @@ The application requests restricted `READ_CALL_LOG` access. Distribution must fo
 ## Rebranding
 
 Change `app_name` and `tagline` in `app/src/main/res/values/strings.xml`, the vector in `res/drawable/ic_brand.xml`, and semantic colors in `ui/Components.kt`. Keep the application ID and signing key when upgrading existing installations.
+
+## UI and authentication update (4.0.1)
+
+The native screens follow the supplied [mobile UI reference](docs/ui-reference.html): purple summary cards, compact metric tiles, rounded surfaces, a white/purple navigation bar, and the illustrated Google welcome screen. Preview-only values never enter the APK.
+
+Google credential selection, Firebase authentication, and workspace loading are separate failure stages. Sign-in errors persist on the welcome screen; an authenticated user whose workspace cannot load gets a retry/switch-account screen instead of a misleading login failure. A 25-second workspace timeout prevents an indefinite spinner. The app retains security checks and never bypasses authentication, Firestore rules, or App Check to hide an error.
+
+The signed APK artifact includes `signing-fingerprints.txt`. Check this against Firebase Project settings and Google OAuth when diagnosing login. Verify Google sign-in is enabled and App Check is configured for the actual distribution channel. A successful APK build alone cannot confirm these live project settings.

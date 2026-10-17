@@ -8,6 +8,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
@@ -28,7 +29,7 @@ fun CallTrackRoot(model: AppViewModel) {
         val entry by nav.currentBackStackEntryAsState()
         val route = entry?.destination?.route ?: "dashboard"
         val s = state.session
-        val ready = s != null && s.companyId.isNotBlank()
+        val ready = s != null && s.companyId.isNotBlank() && state.workspaceError.isBlank()
         LaunchedEffect(s?.uid, s?.companyId) {
             if (
                 ready &&
@@ -41,7 +42,7 @@ fun CallTrackRoot(model: AppViewModel) {
         val tabs =
             if (s?.manager == true)
                 listOf(
-                    "dashboard" to "Dashboard",
+                    "dashboard" to "Home",
                     "team" to "Team",
                     "reports" to "Reports",
                     "calls" to "Calls",
@@ -61,7 +62,7 @@ fun CallTrackRoot(model: AppViewModel) {
             snackbarHost = { SnackbarHost(snack) },
             bottomBar = {
                 if (ready)
-                    NavigationBar {
+                    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                         tabs.forEach { (path, title) ->
                             NavigationBarItem(
                                 selected = route == path,
@@ -74,7 +75,15 @@ fun CallTrackRoot(model: AppViewModel) {
                                         restoreState = true
                                     }
                                 },
-                                label = { Text(title) },
+                                label = {
+                                    Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                },
+                                colors =
+                                    NavigationBarItemDefaults.colors(
+                                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                    ),
                                 icon = {
                                     Icon(
                                         when (path) {
@@ -103,7 +112,8 @@ fun CallTrackRoot(model: AppViewModel) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator()
                             }
-                        s == null -> SignInScreen(model, state.busy > 0)
+                        state.workspaceError.isNotBlank() -> WorkspaceRecovery(state, model)
+                        s == null -> SignInScreen(model, state.busy > 0, state.authError)
                         s.companyId.isBlank() -> WorkspaceScreen(state, model)
                         else ->
                             key(s.uid, s.companyId, s.role) {

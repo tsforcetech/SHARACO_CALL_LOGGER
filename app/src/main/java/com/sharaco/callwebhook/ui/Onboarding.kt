@@ -4,15 +4,21 @@ import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
-import com.sharaco.callwebhook.R
 import com.sharaco.callwebhook.domain.*
 
 const val MONITORING =
@@ -43,37 +49,169 @@ fun LegalDialog(terms: Boolean, close: () -> Unit) {
 }
 
 @Composable
-fun SignInScreen(model: AppViewModel, busy: Boolean = false) {
+fun SignInScreen(model: AppViewModel, busy: Boolean = false, error: String = "") {
     val activity = LocalActivity.current ?: return
-    SignInContent(!busy) { model.signIn(activity) }
+    SignInContent(!busy, error) { model.signIn(activity) }
 }
 
 @Composable
-fun SignInContent(enabled: Boolean = true, signIn: () -> Unit) {
+fun SignInContent(enabled: Boolean = true, error: String = "", signIn: () -> Unit) {
     var legal by remember { mutableStateOf<String?>(null) }
-    Page(stringResource(R.string.app_name), stringResource(R.string.tagline)) {
-        Avatar("CT", modifier = Modifier.size(64.dp))
-        Spacer(Modifier.height(16.dp))
+    Column(
+        Modifier.fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Surface(color = MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(17.dp)) {
+                Icon(
+                    Icons.Default.Insights,
+                    null,
+                    Modifier.padding(13.dp).size(28.dp),
+                    tint = Color.White,
+                )
+            }
+            Text("CallTrack Pro", style = MaterialTheme.typography.titleLarge)
+        }
+        Box(
+            Modifier.fillMaxWidth()
+                .height(212.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.surface,
+                        )
+                    )
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                Modifier.width(182.dp).height(180.dp),
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(22.dp),
+                shadowElevation = 8.dp,
+            ) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Call activity", style = MaterialTheme.typography.labelLarge)
+                        Icon(
+                            Icons.Default.TrendingUp,
+                            null,
+                            Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Box(
+                        Modifier.width(90.dp)
+                            .height(8.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                RoundedCornerShape(4.dp),
+                            )
+                    )
+                    Box(
+                        Modifier.width(60.dp)
+                            .height(8.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                RoundedCornerShape(4.dp),
+                            )
+                    )
+                    val barColor = MaterialTheme.colorScheme.primary
+                    Canvas(Modifier.fillMaxWidth().weight(1f)) {
+                        val heights = listOf(.33f, .60f, .47f, .81f, .59f, .95f)
+                        val step = size.width / heights.size
+                        heights.forEachIndexed { i, h ->
+                            drawRoundRect(
+                                barColor.copy(alpha = if (i == 5) 1f else .35f),
+                                androidx.compose.ui.geometry.Offset(
+                                    i * step,
+                                    size.height * (1 - h),
+                                ),
+                                androidx.compose.ui.geometry.Size(step * .65f, size.height * h),
+                                androidx.compose.ui.geometry.CornerRadius(5.dp.toPx()),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                "WELCOME TO CALLTRACK PRO",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                "Every call.\nEvery insight.",
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "Stay on top of your calling team's performance with a simple, powerful mobile workspace.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (error.isNotBlank()) Hint(error, true)
+        Button(
+            signIn,
+            Modifier.fillMaxWidth().heightIn(min = 54.dp),
+            enabled = enabled,
+            shape = RoundedCornerShape(15.dp),
+        ) {
+            if (!enabled) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(10.dp))
+            }
+            Text(if (enabled) "Continue with Google" else "Signing in…")
+        }
         Text(
-            "Business calls.\nClearer decisions.",
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.Bold,
+            "By continuing you agree to the Terms and Privacy Policy. No call audio is recorded.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text("One workspace for your team's call activity, performance and sync health.")
-        Panel("Built for your workday") {
-            Text("Understand activity across your team.")
-            Text("Keep calls queued safely when offline.")
-            Text("Know when a device needs attention.")
-        }
-        Button(signIn, Modifier.fillMaxWidth().heightIn(min = 52.dp), enabled = enabled) {
-            Text("Continue with Google")
-        }
-        Row {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
             TextButton({ legal = "privacy" }) { Text("Privacy Policy") }
             TextButton({ legal = "terms" }) { Text("Terms") }
         }
     }
     legal?.let { LegalDialog(it == "terms") { legal = null } }
+}
+
+@Composable
+fun WorkspaceRecovery(state: AppState, model: AppViewModel) {
+    Page(
+        "Let's reconnect",
+        "${state.authenticatedEmail.ifBlank { "Your Google account" }} is signed in.",
+    ) {
+        Panel("Workspace unavailable") {
+            Icon(
+                Icons.Default.CloudOff,
+                null,
+                Modifier.size(36.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Text(state.workspaceError)
+            Button({ model.reload() }, Modifier.fillMaxWidth(), enabled = state.busy == 0) {
+                Text(if (state.busy == 0) "Retry workspace" else "Connecting…")
+            }
+            OutlinedButton(
+                { model.signOut() },
+                Modifier.fillMaxWidth(),
+                enabled = state.busy == 0,
+            ) {
+                Text("Use another account")
+            }
+        }
+    }
 }
 
 @Composable

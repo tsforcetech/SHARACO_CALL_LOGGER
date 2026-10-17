@@ -25,6 +25,13 @@ jobs:
       - name: Install SDK
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"'
       - run: gradle :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --no-daemon --stacktrace
+      - name: Render native UI previews
+        run: gradle :app:updateDebugScreenshotTest --no-daemon --max-workers=2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CallTrack-Pro-UI-previews
+          path: app/src/screenshotTestDebug/reference/**/*.png
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: CallTrack-Pro-debug
