@@ -7,6 +7,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.*
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.FirebaseNetworkException
@@ -15,16 +16,35 @@ import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.sharaco.callwebhook.R
 import javax.inject.Inject
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeout
 
 class GoogleAuth @Inject constructor(private val auth: FirebaseAuth) {
-    suspend fun signIn(activity: Activity, reauthenticate: Boolean = false) {
-        val option =
-            GetSignInWithGoogleOption.Builder(activity.getString(R.string.default_web_client_id))
-                .build()
+    suspend fun signIn(
+        activity: Activity,
+        reauthenticate: Boolean = false,
+        alternate: Boolean = false,
+        onStage: (String) -> Unit = {},
+    ) {
+        onStage("Choose your Google account…")
+        val clientId = activity.getString(R.string.default_web_client_id)
+        val option: androidx.credentials.CredentialOption =
+            if (alternate) {
+                GetGoogleIdOption.Builder()
+                    .setServerClientId(clientId)
+                    .setFilterByAuthorizedAccounts(false)
+                    .setAutoSelectEnabled(false)
+                    .build()
+            } else {
+                GetSignInWithGoogleOption.Builder(clientId).build()
+            }
         val response =
-            CredentialManager.create(activity)
-                .getCredential(activity, GetCredentialRequest(listOf(option)))
+            withTimeout(120000) {
+                CredentialManager.create(activity)
+                    .getCredential(activity, GetCredentialRequest(listOf(option)))
+            }
+        onStage("Verifying your Google account…")
         val result = response.credential
         require(
             result is CustomCredential &&
@@ -35,11 +55,13 @@ class GoogleAuth @Inject constructor(private val auth: FirebaseAuth) {
         }
         val token = GoogleIdTokenCredential.createFrom(result.data).idToken
         val credential = GoogleAuthProvider.getCredential(token, null)
-        if (reauthenticate)
-            checkNotNull(auth.currentUser) { "Please sign in again before continuing." }
-                .reauthenticate(credential)
-                .await()
-        else auth.signInWithCredential(credential).await()
+        withTimeout(30000) {
+            if (reauthenticate)
+                checkNotNull(auth.currentUser) { "Please sign in again before continuing." }
+                    .reauthenticate(credential)
+                    .await()
+            else auth.signInWithCredential(credential).await()
+        }
     }
 
     suspend fun signOut(context: Context) {
@@ -51,8 +73,14 @@ class GoogleAuth @Inject constructor(private val auth: FirebaseAuth) {
 /** User-safe diagnostics. Never include ID tokens or the provider's raw error payload. */
 fun signInError(error: Throwable): String =
     when (error) {
+        is GetCredentialCancellationException ->
+            "Google did not complete sign-in. If you selected an account and were returned here, try the other account selector below. Code: GOOGLE_CANCELLED."
+        is GetCredentialInterruptedException ->
+            "Google sign-in was interrupted. Tap Continue with Google again when you are ready. Code: GOOGLE_INTERRUPTED."
+        is TimeoutCancellationException ->
+            "Sign-in took too long to finish. Check your connection, then retry. Code: AUTH_TIMEOUT."
         is NoCredentialException ->
-            "No Google account is available. Add a Google account in Android Settings, then retry."
+            "Google could not return an account. Try the other account selector, or check your Google account in Android Settings. Code: GOOGLE_NO_CREDENTIAL."
         is GetCredentialProviderConfigurationException ->
             "Google sign-in is unavailable on this device. Enable or update Google Play services and retry."
         is GetCredentialUnsupportedException ->

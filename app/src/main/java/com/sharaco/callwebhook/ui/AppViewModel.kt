@@ -27,6 +27,7 @@ data class AppState(
     val busy: Int = 0,
     val error: String = "",
     val authError: String = "",
+    val authPhase: String = "",
     val workspaceError: String = "",
     val authenticatedEmail: String = "",
     val theme: String = "SYSTEM",
@@ -108,18 +109,27 @@ constructor(
         message("")
     }
 
-    fun signIn(activity: Activity) = task {
-        mutable.update { it.copy(authError = "", workspaceError = "") }
-        try {
-            google.signIn(activity)
-        } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
-            return@task
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            mutable.update { it.copy(authError = signInError(e)) }
-            return@task
+    private var signInJob: Job? = null
+
+    fun signIn(activity: Activity, alternate: Boolean = false) {
+        if (signInJob?.isActive == true) return
+        signInJob = task {
+            mutable.update {
+                it.copy(authError = "", workspaceError = "", authPhase = "Opening Google sign-in…")
+            }
+            try {
+                google.signIn(activity, alternate = alternate) { phase ->
+                    mutable.update { it.copy(authPhase = phase) }
+                }
+                mutable.update { it.copy(authPhase = "Opening your workspace…") }
+                loadSession()
+            } catch (e: Exception) {
+                if (e is CancellationException && e !is TimeoutCancellationException) throw e
+                mutable.update { it.copy(authError = signInError(e)) }
+            } finally {
+                mutable.update { it.copy(authPhase = "") }
+            }
         }
-        loadSession()
     }
 
     fun reload() = task { loadSession() }
@@ -134,6 +144,7 @@ constructor(
         mutable.update {
             it.copy(
                 workspaceError = "",
+                loading = it.session == null && backend.auth.currentUser != null,
                 authenticatedEmail = backend.auth.currentUser?.email.orEmpty(),
             )
         }

@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import com.sharaco.callwebhook.BuildConfig
 import com.sharaco.callwebhook.domain.*
 
 const val MONITORING =
@@ -49,14 +50,49 @@ fun LegalDialog(terms: Boolean, close: () -> Unit) {
 }
 
 @Composable
-fun SignInScreen(model: AppViewModel, busy: Boolean = false, error: String = "") {
+fun SignInScreen(
+    model: AppViewModel,
+    busy: Boolean = false,
+    error: String = "",
+    phase: String = "",
+) {
     val activity = LocalActivity.current ?: return
-    SignInContent(!busy, error) { model.signIn(activity) }
+    SignInContent(!busy, error, phase, { model.signIn(activity, alternate = true) }) {
+        model.signIn(activity)
+    }
 }
 
 @Composable
-fun SignInContent(enabled: Boolean = true, error: String = "", signIn: () -> Unit) {
+fun SignInContent(
+    enabled: Boolean = true,
+    error: String = "",
+    phase: String = "",
+    alternateSignIn: (() -> Unit)? = null,
+    signIn: () -> Unit,
+) {
     var legal by remember { mutableStateOf<String?>(null) }
+    var showError by remember { mutableStateOf(false) }
+    LaunchedEffect(error) { showError = error.isNotBlank() }
+    if (showError)
+        AlertDialog(
+            onDismissRequest = { showError = false },
+            title = { Text("Google sign-in did not finish") },
+            text = { Text(error) },
+            confirmButton = {
+                if (alternateSignIn != null)
+                    TextButton(
+                        {
+                            showError = false
+                            alternateSignIn()
+                        },
+                        enabled = enabled,
+                    ) {
+                        Text("Try other account selector")
+                    }
+                else TextButton({ showError = false }) { Text("OK") }
+            },
+            dismissButton = { TextButton({ showError = false }) { Text("Close") } },
+        )
     Column(
         Modifier.fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
@@ -171,8 +207,17 @@ fun SignInContent(enabled: Boolean = true, error: String = "", signIn: () -> Uni
                 CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(10.dp))
             }
-            Text(if (enabled) "Continue with Google" else "Signing in…")
+            Text(if (enabled) "Continue with Google" else phase.ifBlank { "Signing in…" })
         }
+        if (error.isNotBlank() && alternateSignIn != null)
+            OutlinedButton(alternateSignIn, Modifier.fillMaxWidth(), enabled = enabled) {
+                Text("Try other Google account selector")
+            }
+        Text(
+            "Version ${BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Text(
             "By continuing you agree to the Terms and Privacy Policy. No call audio is recorded.",
             style = MaterialTheme.typography.bodySmall,

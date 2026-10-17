@@ -7,7 +7,7 @@ A native Android application for transparent business call-metadata monitoring, 
 - Application ID: `com.sharaco.callwebhook`
 - Firebase project: `sharaco-call-logger`
 - `app/google-services.json` is preserved byte-for-byte from the original project.
-- Version: `4.0.1` / code `101`, above the original version code `31`.
+- Version: `4.0.2` / code `102`, above the original version code `31`.
 - Existing GitHub signing secrets remain in repository settings. The release workflow references `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. No secret values are copied into source.
 - The old implementation remains in Git history and on `main` until this rebuild is merged. This branch does not delete existing cloud data or deploy Firebase automatically.
 
@@ -121,3 +121,9 @@ The native screens follow the supplied [mobile UI reference](docs/ui-reference.h
 Google credential selection, Firebase authentication, and workspace loading are separate failure stages. Sign-in errors persist on the welcome screen; an authenticated user whose workspace cannot load gets a retry/switch-account screen instead of a misleading login failure. A 25-second workspace timeout prevents an indefinite spinner. The app retains security checks and never bypasses authentication, Firestore rules, or App Check to hide an error.
 
 The signed APK artifact includes `signing-fingerprints.txt`. Check this against Firebase Project settings and Google OAuth when diagnosing login. Verify Google sign-in is enabled and App Check is configured for the actual distribution channel. A successful APK build alone cannot confirm these live project settings.
+
+### Google chooser recovery (4.0.2)
+
+Some Google credential providers return a cancellation after account selection because consent or provider setup did not complete. Version 4.0.1 discarded this result silently. Version 4.0.2 displays it immediately, offers an explicit second Credential Manager account-selector flow (all accounts, auto-select disabled), shows the authentication stage, and bounds provider/network waits. It never retries cancelled consent automatically. The live Google provider authorization-URI endpoint accepted the preserved client configuration on 17 October 2026; this does not prove successful authentication on a particular device.
+
+The no-billing Spark architecture revision remains outstanding; this APK still contains Cloud Functions-dependent workspace operations. Do not treat the chooser recovery change as a Spark conversion.

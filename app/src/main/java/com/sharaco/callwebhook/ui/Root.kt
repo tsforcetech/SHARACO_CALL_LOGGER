@@ -113,7 +113,8 @@ fun CallTrackRoot(model: AppViewModel) {
                                 CircularProgressIndicator()
                             }
                         state.workspaceError.isNotBlank() -> WorkspaceRecovery(state, model)
-                        s == null -> SignInScreen(model, state.busy > 0, state.authError)
+                        s == null ->
+                            SignInScreen(model, state.busy > 0, state.authError, state.authPhase)
                         s.companyId.isBlank() -> WorkspaceScreen(state, model)
                         else ->
                             key(s.uid, s.companyId, s.role) {
