@@ -12,11 +12,21 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
-@Module @InstallIn(SingletonComponent::class)
+@Module
+@InstallIn(SingletonComponent::class)
 object Injection {
     @Provides @Singleton fun auth(): FirebaseAuth = FirebaseAuth.getInstance()
+
     @Provides @Singleton fun firestore(): FirebaseFirestore = FirebaseFirestore.getInstance()
-    @Provides @Singleton fun functions(): FirebaseFunctions = FirebaseFunctions.getInstance("europe-west1")
-    @Provides @Singleton fun database(@ApplicationContext context: Context): LocalDatabase = Room.databaseBuilder(context, LocalDatabase::class.java, "calltrack.db").build()
+
+    @Provides
+    @Singleton
+    fun functions(): FirebaseFunctions = FirebaseFunctions.getInstance("europe-west1")
+
+    @Provides
+    @Singleton
+    fun database(@ApplicationContext context: Context): LocalDatabase =
+        Room.databaseBuilder(context, LocalDatabase::class.java, "calltrack.db").build()
+
     @Provides fun dao(db: LocalDatabase): CallDao = db.calls()
 }

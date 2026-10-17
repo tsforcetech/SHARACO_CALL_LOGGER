@@ -16,18 +16,24 @@ import com.sharaco.callwebhook.ui.CallTrackRoot
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
-@AndroidEntryPoint class MainActivity : ComponentActivity() {
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
     @Inject lateinit var reader: CallLogReader
     private val model: AppViewModel by viewModels()
     private var observing = false
-    private val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
-        override fun onChange(selfChange: Boolean) { SyncWork.now(this@MainActivity) }
-    }
+    private val observer =
+        object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                SyncWork.now(this@MainActivity)
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent { CallTrackRoot(model) }
     }
+
     override fun onResume() {
         super.onResume()
         model.permissionsChanged()
@@ -37,8 +43,12 @@ import javax.inject.Inject
         }
         SyncWork.now(this)
     }
+
     override fun onPause() {
-        if (observing) { contentResolver.unregisterContentObserver(observer); observing = false }
+        if (observing) {
+            contentResolver.unregisterContentObserver(observer)
+            observing = false
+        }
         super.onPause()
     }
 }

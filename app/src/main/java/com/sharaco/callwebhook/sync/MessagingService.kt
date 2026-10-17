@@ -16,10 +16,36 @@ import com.sharaco.callwebhook.R
 
 class MessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
-        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        if (
+            Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+                    PackageManager.PERMISSION_GRANTED
+        )
+            return
         val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel("company", "Company updates", NotificationManager.IMPORTANCE_DEFAULT))
-        val intent = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        manager.notify(System.currentTimeMillis().toInt(), NotificationCompat.Builder(this, "company").setSmallIcon(R.drawable.ic_brand).setContentTitle(message.notification?.title ?: getString(R.string.app_name)).setContentText(message.notification?.body).setContentIntent(intent).setAutoCancel(true).build())
+        manager.createNotificationChannel(
+            NotificationChannel(
+                "company",
+                "Company updates",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            )
+        )
+        val intent =
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        manager.notify(
+            System.currentTimeMillis().toInt(),
+            NotificationCompat.Builder(this, "company")
+                .setSmallIcon(R.drawable.ic_brand)
+                .setContentTitle(message.notification?.title ?: getString(R.string.app_name))
+                .setContentText(message.notification?.body)
+                .setContentIntent(intent)
+                .setAutoCancel(true)
+                .build(),
+        )
     }
 }
