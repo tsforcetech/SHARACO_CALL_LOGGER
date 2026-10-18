@@ -34,11 +34,16 @@ test('Spark CRM rules enforce atomic outcomes and single-use foreground call req
    await assertFails(setDoc(path(b,'callRequests','r'),request()));
    await assertFails(setDoc(path(a,'callRequests','r'),{...request(),pairingId:'wrong'}));
    await assertSucceeds(setDoc(path(a,'callRequests','r'),request()));
+   await assertFails(updateDoc(path(a,'callRequests','r'),{status:'DIALER_OPENED'}));
+   await assertSucceeds(updateDoc(path(a,'callRequests','r'),{status:'ACKNOWLEDGED'}));
+   await assertFails(updateDoc(path(a,'callRequests','r'),{status:'ACKNOWLEDGED'}));
+   await assertSucceeds(updateDoc(path(a,'webDevicePairings','a'),{readyUntil:0,updatedAt:serverTimestamp()}));
    await assertSucceeds(updateDoc(path(a,'callRequests','r'),{status:'DIALER_OPENED'}));
    await assertFails(updateDoc(path(a,'callRequests','r'),{status:'CREATED'}));
    await assertFails(updateDoc(path(a,'callRequests','r'),{status:'DIALER_OPENED'}));
   });
   await t.test('expired and revoked-device requests cannot be consumed',async()=>{
+   await assertSucceeds(setDoc(path(a,'webDevicePairings','a'),pair()));
    await env.withSecurityRulesDisabled(async context=>{await setDoc(path(context.firestore(),'callRequests','expired'),{...request(),requestId:'expired',expiresAt:Date.now()-1000});});
    await assertFails(updateDoc(path(a,'callRequests','expired'),{status:'DIALER_OPENED'}));
    await env.withSecurityRulesDisabled(async context=>{await updateDoc(path(context.firestore(),'devices',`a_${did}`),{status:'inactive'});});

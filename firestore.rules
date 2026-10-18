@@ -169,10 +169,11 @@ service cloud.firestore {
    function openClaim(lid, sid) { return ownLead(lid) && lead(lid).claimSessionId == sid
     && lead(lid).claimedBy == request.auth.uid && lead(lid).claimExpiresAt > request.time.toMillis(); }
    function pair() { return get(/databases/$(database)/documents/companies/$(cid)/webDevicePairings/$(request.auth.uid)).data; }
-   function paired(d) { return active(cid) && d.employeeUid == request.auth.uid
+   function pairIdentity(d) { return active(cid) && d.employeeUid == request.auth.uid
     && d.pairingId == pair().pairingId && d.deviceId == pair().deviceId && pair().enabled == true
-    && pair().expiresAt > request.time.toMillis() && pair().readyUntil > request.time.toMillis()
+    && pair().expiresAt > request.time.toMillis()
     && currentDevice(cid, d.deviceId); }
+   function paired(d) { return pairIdentity(d) && pair().readyUntil > request.time.toMillis(); }
    match /campaigns/{campaignId} {
     allow read: if admin(cid) || (active(cid) && request.auth.uid in resource.data.get('employeeUids', []));
     allow create, update: if admin(cid) && request.resource.data.name is string
@@ -288,10 +289,11 @@ service cloud.firestore {
      && request.resource.data.status == 'CREATED' && request.resource.data.createdAt == request.time
      && request.resource.data.expiresAt is int && request.resource.data.expiresAt > request.time.toMillis()
      && request.resource.data.expiresAt <= request.time.toMillis() + 60000;
-    allow update: if paired(resource.data) && ownLead(resource.data.leadId) && !lead(resource.data.leadId).doNotCall && !lead(resource.data.leadId).terminal
-     && resource.data.status == 'CREATED' && resource.data.expiresAt > request.time.toMillis()
+    allow update: if pairIdentity(resource.data) && ownLead(resource.data.leadId) && !lead(resource.data.leadId).doNotCall && !lead(resource.data.leadId).terminal
+     && resource.data.expiresAt > request.time.toMillis()
      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-     && request.resource.data.status in ['DIALER_OPENED','CANCELLED'];
+     && ((resource.data.status == 'CREATED' && pair().readyUntil > request.time.toMillis() && request.resource.data.status in ['ACKNOWLEDGED','CANCELLED'])
+      || (resource.data.status == 'ACKNOWLEDGED' && request.resource.data.status == 'DIALER_OPENED'));
    }
   }
   match /invitations/{token} {

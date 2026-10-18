@@ -139,11 +139,16 @@ fun WebCallingControl(state: AppState) {
                             check(data.getString("phoneNumber") == request.second) {
                                 "Request changed."
                             }
-                            tx.update(r, "status", if (dial) "DIALER_OPENED" else "CANCELLED")
+                            tx.update(r, "status", if (dial) "ACKNOWLEDGED" else "CANCELLED")
                         }
                         .await()
                     pending = null
-                    if (dial) context.startActivity(intent)
+                    if (dial) {
+                        context.startActivity(intent)
+                        company.collection("callRequests").document(request.first)
+                            .update("status", "DIALER_OPENED")
+                            .addOnFailureListener { failure(it) }
+                    }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     failure(e)
