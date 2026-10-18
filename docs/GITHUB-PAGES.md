@@ -5,6 +5,10 @@ Firebase billing upgrade, or Android authentication changes are required.
 
 ## One-time setup
 
+The Pages workflow now includes the public configuration supplied for the
+`sharaco_caller` web app. Actions variables below are optional overrides;
+they are not required for this project's default deployment.
+
 1. In Firebase project `sharaco-call-logger`, open Project settings → Your apps.
    Select or register a **Web** app. Copy its public `apiKey` and `appId`.
    Do not use an Android app ID or upload a service-account/private key.

@@ -17,8 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NEXT_PUBLIC_BASE_PATH: /SHARACO_CALL_LOGGER
-      NEXT_PUBLIC_FIREBASE_API_KEY: ${{ vars.NEXT_PUBLIC_FIREBASE_API_KEY || secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
-      NEXT_PUBLIC_FIREBASE_APP_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_APP_ID || secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+      # Public Firebase web SDK configuration; access is enforced by Auth and rules.
+      NEXT_PUBLIC_FIREBASE_API_KEY: ${{ vars.NEXT_PUBLIC_FIREBASE_API_KEY || secrets.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyAb6zSBftxz_QyUWl1Wc7K-_VLSPz_FYAc' }}
+      NEXT_PUBLIC_FIREBASE_APP_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_APP_ID || secrets.NEXT_PUBLIC_FIREBASE_APP_ID || '1:205964404683:web:d33b131e37cfe9930cb84e' }}
       NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: sharaco-call-logger.firebaseapp.com
       NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${{ vars.NEXT_PUBLIC_RECAPTCHA_SITE_KEY }}
     steps:
