@@ -38,6 +38,13 @@ constructor(
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED
 
+    suspend fun enrolled(): Boolean {
+        val config = prefs.config()
+        return config.company.isNotBlank() &&
+            config.uid == backend.auth.currentUser?.uid &&
+            reader.permitted()
+    }
+
     suspend fun reset() =
         mutex.withLock {
             dao.clear()

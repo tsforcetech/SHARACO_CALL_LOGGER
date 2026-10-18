@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, collection, writeBatch, setDoc, updateDoc, serverTimestamp, Timestamp, query, where } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, writeBatch, setDoc, updateDoc, serverTimestamp, Timestamp, query, where, onSnapshot } from 'firebase/firestore';
 
 test('Spark onboarding: atomic creation, invitations, approval, isolation and adversarial writes', async t => {
  const env = await initializeTestEnvironment({projectId:'demo-calltrack',firestore:{rules:await readFile('../firestore.rules','utf8')}});
@@ -129,6 +129,20 @@ test('Spark onboarding: atomic creation, invitations, approval, isolation and ad
    await assertFails(updateDoc(ref(staff,dp(newer)),{lastSeen:serverTimestamp()}));
    await assertFails(setDoc(ref(staff,'companies/c/call_logs/revoked'),call('revoked',newer)));
    await assertSucceeds(updateDoc(ref(owner,mr),{approved:true}));
+  });
+  await t.test('live employee query receives newly synced calls and finalized durations', async()=>{
+   const liveQuery=query(collection(staff,'companies/c/call_logs'),where('uid','==','staff'),where('startedAt','>=',0));
+   const received=[];
+   const stop=onSnapshot(liveQuery,s=>received.push(s.docs.map(d=>({id:d.id,...d.data()}))));
+   async function waitFor(predicate){const end=Date.now()+5000;while(!received.some(predicate)){if(Date.now()>end)throw new Error('Live update was not delivered');await new Promise(r=>setTimeout(r,20));}}
+   try {
+    await waitFor(rows=>rows.some(r=>r.id==='new'));
+    await setDoc(ref(staff,'companies/c/call_logs/live'),{uid:'staff',companyId:'c',sim:'',remoteNumber:'+971500000001',contactName:'',type:'OUTGOING',startedAt:Date.now()-1000,durationSec:12,createdAt:serverTimestamp(),deviceCallId:'live',deviceId:'22222222-2222-2222-2222-222222222222'});
+    await waitFor(rows=>rows.some(r=>r.id==='live' && r.durationSec===12));
+    await updateDoc(ref(staff,'companies/c/call_logs/live'),{durationSec:40});
+    await waitFor(rows=>rows.some(r=>r.id==='live' && r.durationSec===40));
+    assert.ok(received.every(rows=>rows.every(r=>r.uid==='staff')));
+   } finally { stop(); }
   });
   await t.test('revoked and expired invitations cannot be claimed, legacy token is not a bypass',async()=>{
    await env.withSecurityRulesDisabled(async c=>{

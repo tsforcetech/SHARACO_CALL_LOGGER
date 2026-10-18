@@ -128,7 +128,7 @@ fun SyncScreen(state: AppState, model: AppViewModel) {
             }
         }
         Text(
-            "Android schedules periodic work at intervals of at least 15 minutes and may delay it for battery restrictions. Force-stopping the app prevents work until you reopen it. Calls are reconciled on launch, resume, manual sync and periodic work; device manufacturers may require battery settings changes.",
+            "Call-history changes trigger background sync even when this screen is closed. A periodic check also runs approximately every 15 minutes. Android may delay work under battery restrictions; force-stopping the app pauses it until you reopen it.",
             style = MaterialTheme.typography.bodySmall,
         )
     }

@@ -71,6 +71,8 @@ constructor(
     private var pendingJob: Job? = null
     private var reportJob: Job? = null
     private var callsJob: Job? = null
+    private var liveCalls: ListenerRegistration? = null
+    private var liveRefreshJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -134,6 +136,7 @@ constructor(
     fun reload() = task { loadSession() }
 
     private suspend fun loadSession() {
+        stopLiveCalls()
         listeners.forEach { it.remove() }
         listeners.clear()
         localJob?.cancel()
@@ -239,6 +242,7 @@ constructor(
                                 SyncWork.cancel(context)
                                 reportJob?.cancel()
                                 callsJob?.cancel()
+                                stopLiveCalls()
                                 listeners.forEach { it.remove() }
                                 listeners.clear()
                                 engine.reset()
@@ -260,7 +264,45 @@ constructor(
                 }
         refreshReport()
         loadCalls()
+        watchLiveCalls()
         if (config.company == s.companyId && config.uid == s.uid) SyncWork.schedule(context)
+    }
+
+    private fun stopLiveCalls() {
+        liveCalls?.remove()
+        liveCalls = null
+        liveRefreshJob?.cancel()
+        liveRefreshJob = null
+    }
+
+    private fun watchLiveCalls() {
+        stopLiveCalls()
+        val session = mutable.value.session ?: return
+        if (session.companyId.isBlank()) return
+        val filters = mutable.value.filters
+        liveCalls =
+            backend.watchCallChanges(
+                session,
+                filters.payload(session.zone),
+                changed = {
+                    liveRefreshJob?.cancel()
+                    liveRefreshJob =
+                        viewModelScope.launch {
+                            delay(
+                                500
+                            ) // Coalesce one uploaded batch instead of refetching for every call.
+                            if (
+                                mutable.value.session?.companyId == session.companyId &&
+                                    mutable.value.session?.uid == session.uid &&
+                                    mutable.value.filters == filters
+                            ) {
+                                refreshReport()
+                                loadCalls()
+                            }
+                        }
+                },
+                failed = { message(humanError(it)) },
+            )
     }
 
     private fun watchLocal(s: Session) {
@@ -291,6 +333,7 @@ constructor(
 
     fun setFilters(value: Filters) {
         mutable.update { it.copy(filters = value, report = emptyMap(), calls = emptyList()) }
+        watchLiveCalls()
         refreshReport()
         loadCalls()
     }
@@ -455,6 +498,7 @@ constructor(
     fun signOut() = task {
         SyncWork.cancel(context)
         engine.reset()
+        stopLiveCalls()
         listeners.forEach { it.remove() }
         listeners.clear()
         localJob?.cancel()
@@ -486,12 +530,14 @@ constructor(
         SyncWork.cancel(context)
         engine.reset()
         google.signOut(context)
+        stopLiveCalls()
         listeners.forEach { it.remove() }
         listeners.clear()
         mutable.update { AppState(loading = false, theme = it.theme) }
     }
 
     override fun onCleared() {
+        stopLiveCalls()
         listeners.forEach { it.remove() }
         super.onCleared()
     }

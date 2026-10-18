@@ -2,18 +2,20 @@
 
 A native Android application for transparent business call-metadata monitoring, employee onboarding and company reporting. Kotlin, Jetpack Compose Material 3, Hilt, Room, DataStore, WorkManager and Firebase.
 
-## Current release: 4.1.1 Spark onboarding and device sync
+## Current release: 4.1.2 background sync and live dashboard
 
 The complete Kotlin source replaces the old Java app on `main`. Company creation, employee invitations, join requests, administrator approval and dashboard reads now use direct Firestore with the legacy field names. **Publish the new rules and indexes before installing**; GitHub does not deploy Firebase automatically. See [Spark onboarding, callable audit and acceptance instructions](docs/SPARK-ONBOARDING.md). Google authentication and Firebase client configuration are preserved. Device registration, replacement, heartbeat and call uploads now also use direct Firestore. Publish the 4.1.1 rules even if you published the 4.1.0 rules earlier.
 
 This is not a complete conversion of every feature to Spark: advanced employee actions, company settings edits, deletion/leave and notification registration still require the original server operations. The older architecture/deployment sections below describe that server design and must not be interpreted as instructions to enable billing or blindly deploy Functions with the Spark schema.
+
+4.1.2 adds a persisted call-history content trigger that schedules sync without an open Activity, with periodic/reconnect reconciliation retained. Dashboard and call lists refresh automatically from Firestore change notifications. No additional rules/index changes are needed beyond 4.1.1. Android battery restrictions can delay work; force-stop requires reopening the app.
 
 ## Existing configuration preserved
 
 - Application ID: `com.sharaco.callwebhook`
 - Firebase project: `sharaco-call-logger`
 - `app/google-services.json` is preserved byte-for-byte from the original project.
-- Version: `4.1.1` / code `104`, above the original version code `31`.
+- Version: `4.1.2` / code `105`, above the original version code `31`.
 - Existing GitHub signing secrets remain in repository settings. The release workflow references `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. No secret values are copied into source.
 - The old Java implementation remains recoverable in Git history. This source update does not delete existing cloud data or deploy Firebase automatically.
 

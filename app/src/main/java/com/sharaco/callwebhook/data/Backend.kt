@@ -59,6 +59,27 @@ constructor(
         return spark.session()
     }
 
+    fun watchCallChanges(
+        session: Session,
+        filters: Row,
+        changed: () -> Unit,
+        failed: (Exception) -> Unit,
+    ): ListenerRegistration {
+        var query = firestore.collection("companies/${session.companyId}/call_logs").limit(5001)
+        if (!session.manager) query = query.whereEqualTo("uid", session.uid)
+        if (filters.num("from") > 0)
+            query = query.whereGreaterThanOrEqualTo("startedAt", filters.num("from"))
+        if (filters.num("to") > 0) query = query.whereLessThan("startedAt", filters.num("to"))
+        return query.addSnapshotListener { snapshot, error ->
+            if (error != null) failed(error)
+            else if (snapshot != null) {
+                // Includes the initial snapshot to cover writes racing the initial report fetch.
+                // Metadata-only events are excluded by the default listener options.
+                changed()
+            }
+        }
+    }
+
     fun watch(
         session: Session,
         collection: String,
