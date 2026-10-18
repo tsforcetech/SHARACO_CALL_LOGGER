@@ -44,7 +44,7 @@ class CallLogReaderTest {
 
     @Before
     fun setup() {
-        val app = RuntimeEnvironment.getApplication<Application>()
+        val app = RuntimeEnvironment.getApplication()
         shadowOf(app).grantPermissions(Manifest.permission.READ_CALL_LOG)
         db =
             Room.inMemoryDatabaseBuilder(app, LocalDatabase::class.java)
@@ -85,7 +85,7 @@ class CallLogReaderTest {
 
     @Test
     fun deniedPermissionNeverQueriesHistory() = runBlocking {
-        shadowOf(RuntimeEnvironment.getApplication<Application>())
+        shadowOf(RuntimeEnvironment.getApplication())
             .denyPermissions(Manifest.permission.READ_CALL_LOG)
         try {
             reader.scan(config, config.initial)
