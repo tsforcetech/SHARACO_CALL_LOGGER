@@ -1,6 +1,15 @@
 {
   "indexes": [
     {
+      "collectionGroup": "callRequests", "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "employeeUid", "order": "ASCENDING"},
+        {"fieldPath": "pairingId", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "expiresAt", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "call_logs",
       "queryScope": "COLLECTION",
       "fields": [

@@ -159,6 +159,140 @@ service cloud.firestore {
      && request.resource.data.get('nextFollowUp','') is string && request.resource.data.get('nextFollowUp','').size() <= 30
      && request.resource.data.get('lastUpdatedBy',request.auth.uid) == request.auth.uid && request.resource.data.get('contactedBy',request.auth.uid) == request.auth.uid;
    }
+   // Spark CRM: clients are untrusted. Each workflow must commit its related records together.
+   function lead(lid) { return get(/databases/$(database)/documents/companies/$(cid)/leads/$(lid)).data; }
+   function leadAfter(lid) { return getAfter(/databases/$(database)/documents/companies/$(cid)/leads/$(lid)).data; }
+   function attemptAfter(aid) { return getAfter(/databases/$(database)/documents/companies/$(cid)/crmCallAttempts/$(aid)).data; }
+   function disposition(sid) { return get(/databases/$(database)/documents/companies/$(cid)/dispositionStatuses/$(sid)).data; }
+   function mine(d) { return active(cid) && d.employeeUid == request.auth.uid; }
+   function ownLead(lid) { return active(cid) && lead(lid).assignedTo == request.auth.uid; }
+   function openClaim(lid, sid) { return ownLead(lid) && lead(lid).claimSessionId == sid
+    && lead(lid).claimedBy == request.auth.uid && lead(lid).claimExpiresAt > request.time.toMillis(); }
+   function pair() { return get(/databases/$(database)/documents/companies/$(cid)/webDevicePairings/$(request.auth.uid)).data; }
+   function paired(d) { return active(cid) && d.employeeUid == request.auth.uid
+    && d.pairingId == pair().pairingId && d.deviceId == pair().deviceId && pair().enabled == true
+    && pair().expiresAt > request.time.toMillis() && pair().readyUntil > request.time.toMillis()
+    && currentDevice(cid, d.deviceId); }
+   match /campaigns/{campaignId} {
+    allow read: if admin(cid) || (active(cid) && request.auth.uid in resource.data.get('employeeUids', []));
+    allow create, update: if admin(cid) && request.resource.data.name is string
+     && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 160
+     && request.resource.data.status in ['draft','active','paused','completed','archived'];
+   }
+   match /dispositionStatuses/{sid} {
+    allow read: if active(cid);
+    allow create, update: if admin(cid) && request.resource.data.statusId == sid
+     && request.resource.data.active is bool && request.resource.data.isTerminal is bool
+     && request.resource.data.requiresRemarks is bool && request.resource.data.requiresFollowUp is bool
+     && request.resource.data.countsAsInterested is bool && request.resource.data.countsAsConversion is bool
+     && request.resource.data.label is string && request.resource.data.label.size() <= 80;
+   }
+   match /leads/{lid} {
+    allow read: if admin(cid) || (active(cid) && resource.data.assignedTo == request.auth.uid);
+    allow create: if admin(cid) && request.resource.data.companyId == cid && request.resource.data.leadId == lid
+     && member(cid, request.resource.data.assignedTo).approved == true
+     && request.resource.data.customerName is string && request.resource.data.customerName.size() <= 160
+     && request.resource.data.primaryPhone.matches('\\+[1-9][0-9]{7,14}')
+     && request.resource.data.version == 1 && request.resource.data.createdAt == request.time;
+    allow update: if admin(cid) && request.resource.data.companyId == cid && request.resource.data.leadId == lid
+     && request.resource.data.version == resource.data.version + 1;
+    allow update: if active(cid) && resource.data.assignedTo == request.auth.uid && (
+     (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['claimedBy','claimSessionId','claimExpiresAt'])
+      && !resource.data.terminal && !resource.data.doNotCall
+      && (resource.data.get('claimExpiresAt',0) <= request.time.toMillis() || resource.data.get('claimedBy','') == request.auth.uid)
+      && request.resource.data.claimedBy == request.auth.uid
+      && request.resource.data.claimExpiresAt > request.time.toMillis()
+      && request.resource.data.claimExpiresAt <= request.time.toMillis() + 900000
+      && getAfter(/databases/$(database)/documents/companies/$(cid)/callingSessions/$(request.resource.data.claimSessionId)).data.employeeUid == request.auth.uid
+      && getAfter(/databases/$(database)/documents/companies/$(cid)/callingSessions/$(request.resource.data.claimSessionId)).data.leadId == lid)
+     || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','terminal','doNotCall','remarks','tags','nextFollowUpAt','lastContactAt','updatedAt','version','claimedBy','claimSessionId','claimExpiresAt','lastAttemptId'])
+      && openClaim(lid, resource.data.claimSessionId)
+      && request.resource.data.version == resource.data.version + 1
+      && attemptAfter(request.resource.data.lastAttemptId).leadId == lid
+      && attemptAfter(request.resource.data.lastAttemptId).employeeUid == request.auth.uid
+      && attemptAfter(request.resource.data.lastAttemptId).createdAt == request.time
+      && request.resource.data.status == attemptAfter(request.resource.data.lastAttemptId).dispositionId
+      && request.resource.data.remarks == attemptAfter(request.resource.data.lastAttemptId).remarks
+      && request.resource.data.tags == attemptAfter(request.resource.data.lastAttemptId).tags
+      && request.resource.data.nextFollowUpAt == attemptAfter(request.resource.data.lastAttemptId).nextFollowUpAt
+      && request.resource.data.terminal == disposition(request.resource.data.status).isTerminal
+      && request.resource.data.doNotCall == (request.resource.data.status == 'do_not_call')
+      && request.resource.data.claimedBy == '' && request.resource.data.claimSessionId == '' && request.resource.data.claimExpiresAt == 0
+      && request.resource.data.updatedAt == request.time && request.resource.data.lastContactAt == request.time));
+   }
+   match /callingSessions/{sid} {
+    allow read: if admin(cid) || mine(resource.data);
+    allow create: if mine(request.resource.data) && ownLead(request.resource.data.leadId)
+     && request.resource.data.keys().hasOnly(['employeeUid','leadId','status','createdAt','expiresAt'])
+     && request.resource.data.status == 'READY' && request.resource.data.createdAt == request.time
+     && leadAfter(request.resource.data.leadId).claimSessionId == sid
+     && request.resource.data.expiresAt == leadAfter(request.resource.data.leadId).claimExpiresAt;
+    allow update: if mine(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','attemptId'])
+     && resource.data.status == 'READY' && request.resource.data.status == 'DISPOSITION_SAVED'
+     && attemptAfter(request.resource.data.attemptId).sessionId == sid;
+   }
+   match /crmCallAttempts/{aid} {
+    allow read: if admin(cid) || mine(resource.data);
+    allow create: if mine(request.resource.data) && request.resource.data.attemptId == aid && request.resource.data.companyId == cid
+     && request.resource.data.keys().hasOnly(['attemptId','companyId','leadId','employeeUid','campaignId','sessionId','dispositionId','remarks','tags','nextFollowUpAt','createdAt','verificationStatus','matchedCallId','durationSeconds','connectionStatus'])
+     && openClaim(request.resource.data.leadId, request.resource.data.sessionId)
+     && disposition(request.resource.data.dispositionId).active == true
+     && request.resource.data.verificationStatus == 'UNVERIFIED' && request.resource.data.matchedCallId == null
+     && request.resource.data.durationSeconds == null && request.resource.data.connectionStatus == 'UNKNOWN'
+     && request.resource.data.campaignId == lead(request.resource.data.leadId).campaignId
+     && request.resource.data.remarks is string && request.resource.data.remarks.size() <= 1000
+     && (!disposition(request.resource.data.dispositionId).requiresRemarks || request.resource.data.remarks.size() > 0)
+     && request.resource.data.tags is list && request.resource.data.tags.size() <= 20
+     && (request.resource.data.nextFollowUpAt == null || (request.resource.data.nextFollowUpAt is int && request.resource.data.nextFollowUpAt > request.time.toMillis()))
+     && (!disposition(request.resource.data.dispositionId).requiresFollowUp || request.resource.data.nextFollowUpAt != null)
+     && (request.resource.data.nextFollowUpAt == null || getAfter(/databases/$(database)/documents/companies/$(cid)/followUps/$(aid)).data.dueAt == request.resource.data.nextFollowUpAt)
+     && request.resource.data.createdAt == request.time
+     && leadAfter(request.resource.data.leadId).lastAttemptId == aid
+     && getAfter(/databases/$(database)/documents/companies/$(cid)/callingSessions/$(request.resource.data.sessionId)).data.attemptId == aid
+     && getAfter(/databases/$(database)/documents/companies/$(cid)/leadActivities/$(aid)).data.attemptId == aid;
+   }
+   match /leadActivities/{aid} {
+    allow read: if admin(cid) || mine(resource.data);
+    allow create: if mine(request.resource.data) && request.resource.data.diff(attemptAfter(aid)).affectedKeys().hasOnly(['type'])
+     && request.resource.data.type == 'DISPOSITION' && attemptAfter(aid).createdAt == request.time;
+   }
+   match /followUps/{fid} {
+    allow read: if admin(cid) || mine(resource.data);
+    allow create: if mine(request.resource.data) && request.resource.data.keys().hasOnly(['leadId','employeeUid','dueAt','status','remarks','createdAt'])
+     && request.resource.data.leadId == attemptAfter(fid).leadId && request.resource.data.employeeUid == attemptAfter(fid).employeeUid
+     && request.resource.data.dueAt == attemptAfter(fid).nextFollowUpAt && request.resource.data.remarks == attemptAfter(fid).remarks
+     && attemptAfter(fid).createdAt == request.time && request.resource.data.createdAt == request.time && request.resource.data.status == 'pending';
+   }
+   match /targetDefinitions/{tid} {
+    allow read: if admin(cid) || mine(resource.data);
+    allow create: if admin(cid) && member(cid,request.resource.data.employeeUid).approved == true
+     && request.resource.data.value is number && request.resource.data.value > 0
+     && request.resource.data.period in ['daily','weekly','monthly','custom'] && request.resource.data.createdAt == request.time;
+   }
+   match /webDevicePairings/{uid} {
+    allow read: if active(cid) && request.auth.uid == uid;
+    allow create, update: if active(cid) && request.auth.uid == uid && request.resource.data.employeeUid == uid
+     && request.resource.data.keys().hasOnly(['employeeUid','deviceId','pairingId','enabled','expiresAt','readyUntil','updatedAt'])
+     && currentDevice(cid,request.resource.data.deviceId) && request.resource.data.pairingId.matches('[0-9a-f-]{36}')
+     && request.resource.data.enabled is bool && request.resource.data.updatedAt == request.time
+     && request.resource.data.expiresAt is int && request.resource.data.expiresAt <= request.time.toMillis() + 28800000
+     && request.resource.data.readyUntil is int && request.resource.data.readyUntil <= request.time.toMillis() + 90000;
+   }
+   match /callRequests/{rid} {
+    allow read: if mine(resource.data);
+    allow create: if paired(request.resource.data) && request.resource.data.requestId == rid
+     && request.resource.data.keys().hasOnly(['requestId','employeeUid','deviceId','pairingId','leadId','phoneNumber','status','createdAt','expiresAt'])
+     && ownLead(request.resource.data.leadId) && !lead(request.resource.data.leadId).terminal && !lead(request.resource.data.leadId).doNotCall
+     && request.resource.data.phoneNumber == lead(request.resource.data.leadId).primaryPhone
+     && request.resource.data.phoneNumber.matches('\\+[1-9][0-9]{7,14}')
+     && request.resource.data.status == 'CREATED' && request.resource.data.createdAt == request.time
+     && request.resource.data.expiresAt is int && request.resource.data.expiresAt > request.time.toMillis()
+     && request.resource.data.expiresAt <= request.time.toMillis() + 60000;
+    allow update: if paired(resource.data) && ownLead(resource.data.leadId) && !lead(resource.data.leadId).doNotCall && !lead(resource.data.leadId).terminal
+     && resource.data.status == 'CREATED' && resource.data.expiresAt > request.time.toMillis()
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+     && request.resource.data.status in ['DIALER_OPENED','CANCELLED'];
+   }
   }
   match /invitations/{token} {
    allow get: if verified() && (resource.data.email == request.auth.token.email.lower() || admin(resource.data.companyId));

@@ -4,7 +4,6 @@ import { getFirestore } from "firebase/firestore";
 import {
   initializeAppCheck,
   ReCaptchaV3Provider,
-  getToken,
   AppCheck,
 } from "firebase/app-check";
 let check: AppCheck | undefined;
@@ -45,33 +44,6 @@ export async function api(
   body?: unknown,
   key?: string,
 ) {
-  const { auth } = firebase();
-  if (!auth.currentUser) throw new Error("UNAUTHENTICATED: Sign in again.");
-  const base = process.env.NEXT_PUBLIC_CRM_API_URL;
-  if (!base)
-    throw new Error(
-      "BACKEND_NOT_CONFIGURED: The CRM server URL has not been configured.",
-    );
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${await auth.currentUser.getIdToken()}`,
-  };
-  if (check) headers["X-Firebase-AppCheck"] = (await getToken(check)).token;
-  if (body !== undefined) {
-    headers["Content-Type"] = "application/json";
-    headers["Idempotency-Key"] = key || crypto.randomUUID();
-  }
-  const response = await fetch(
-    `${base.replace(/\/$/, "")}/v1/companies/${encodeURIComponent(company)}/${path}`,
-    {
-      method: body === undefined ? "GET" : "POST",
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    },
-  );
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(
-      `${result.error?.code || response.status}: ${result.error?.message || "Request failed"}`,
-    );
-  return result;
+  const { sparkApi } = await import("./spark");
+  return sparkApi(company, path, body, key);
 }

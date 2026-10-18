@@ -138,4 +138,4 @@ The 4.1.0 correction converts onboarding and dashboard reads to Spark, as docume
 
 ## Phase 2 development — Firebase Spark retained
 
-The additive `server/` Node backend and `web/` Next.js workspace are under development. They reuse the existing Firebase identity and company data. This is not a finished Phase 2 release; Android 4.1.2 remains the delivered app. See [architecture, verified scope, remaining work and deployment prerequisites](docs/PHASE2-SPARK.md).
+Phase 2 now uses Firebase Spark directly with a static `web/` workspace on Firebase Hosting. No external Node server is required. The earlier `server/` prototype is retained as reference only. Foreground web-to-Android calling is in development version 4.2.0-dev; full Phase 2 is not complete. See [architecture, verified scope, remaining work and deployment prerequisites](docs/PHASE2-SPARK.md).

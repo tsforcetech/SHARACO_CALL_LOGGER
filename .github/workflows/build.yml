@@ -65,7 +65,7 @@ jobs:
           java-version: '21'
       - run: npm ci --prefix functions
       - run: npm test --prefix functions
-      - run: npx --yes firebase-tools@14.12.0 emulators:exec --project demo-calltrack --only firestore 'cd functions && node --test test/spark.test.js && npm run test:integration'
+      - run: npx --yes firebase-tools@14.12.0 emulators:exec --project demo-calltrack --only firestore 'cd functions && node --test test/spark.test.js test/crm-spark.test.js && npm run test:integration'
   crm:
     runs-on: ubuntu-latest
     steps:

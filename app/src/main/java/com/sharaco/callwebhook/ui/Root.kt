@@ -51,6 +51,7 @@ fun CallTrackRoot(model: AppViewModel) {
             else
                 listOf(
                     "dashboard" to "Home",
+                    "crm" to "Leads",
                     "calls" to "Calls",
                     "sync" to "Sync",
                     "settings" to "Profile",
@@ -103,6 +104,7 @@ fun CallTrackRoot(model: AppViewModel) {
             },
         ) { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
+                if (ready) key(s!!.uid, s.companyId) { WebCallingControl(state) }
                 if (state.busy > 0) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (ready && route !in tabs.map { it.first })
                     TextButton({ nav.popBackStack() }) { Text("‹ Back") }
@@ -138,6 +140,7 @@ fun CallTrackRoot(model: AppViewModel) {
                                         if (s.manager) ReportsScreen(state, model, ::navigate)
                                     }
                                     composable("calls") { CallsScreen(state, model) }
+                                    composable("crm") { CrmScreen(state) }
                                     composable("sync") { SyncScreen(state, model) }
                                     composable("settings") {
                                         SettingsScreen(state, model, ::navigate)

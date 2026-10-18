@@ -1,5 +1,34 @@
 # Phase 2 — Spark architecture and development status
 
+## Current decision: Firebase only, no separately hosted server
+
+The user accepted foreground Android availability for web calling on 18 October 2026. This supersedes the external Node architecture below. `web/lib/spark.ts` now talks directly to Firestore and the web exports static files for Firebase Hosting (`web/out`). The `server/` prototype remains in source for reference and is not used by the web or Android runtime. Do not deploy it or Cloud Functions for the new flow.
+
+The current development update adds:
+
+- Direct Firestore company-scoped CRM reads, campaign creation, disposition setup, lead claims, atomic outcomes/follow-ups, and retry-safe Save & Next.
+- Native Android assigned-lead queue (up to 200 loaded records), user-initiated dialer, outcome entry, follow-up scheduling and Save & Next using the same atomic protocol.
+- Live first-page table updates with Firestore listeners. Pagination explicitly loads additional records.
+- Browser Excel/CSV import (template headers, 1,000-row/5 MB limits, preview, invalid-row download, equal staff distribution, skip existing company phone numbers). Keep the page open. This is not yet the full column-mapping/campaign wizard.
+- Foreground Android web calling, explicitly enabled by the employee. Only the active registered device is accepted. Readiness expires after 80 seconds without heartbeat; pairing expires within eight hours. Each phone request expires after 55 seconds and requires a user tap on Android. Consumed, expired, wrong-number and revoked-device requests fail security rules.
+- No FCM sender, Cloud Functions, hidden dialing or external API URL dependency.
+- Updated Firestore rules and a callRequests composite index. Existing Phase 1 rules and schema remain intact.
+- Android development version `4.2.0-dev`, code 106. This is not a complete Phase 2 release.
+
+Deploy prerequisites: publish the updated rules and indexes, configure the existing project's Firebase web app public config and App Check site key, build the static web app, then deploy **Hosting only**. Authenticate Firebase CLI through the normal account workflow; never paste service-account secrets into the web app or chat.
+
+```sh
+npm ci --prefix web
+npm run build --prefix web
+firebase deploy --project sharaco-call-logger --only firestore:rules,firestore:indexes,hosting
+```
+
+Wait until the new index is ready. On the registered Android phone, sign in and tap **Enable web calling**. Keep the app visible. In the same account/company on web, open your assigned lead and send the call request; confirm **Open dialer** on the phone. Phone request status is not proof of a completed/connected call.
+
+Still pending: native queue pagination/session restoration, verified CRM call matching, comprehensive target management/analytics/reports, full import wizard, follow-up completion/conflict workflow, offline outcome queue, manager scope expansion and physical-device acceptance testing. Google login was preserved in source; it has not been interactively tested in this development update. Do not claim production readiness.
+
+The historical architecture and foundation notes below describe the earlier Node prototype, not the current deployment requirement.
+
 Decision: 18 October 2026. Keep `sharaco-call-logger` on Firebase Spark.
 
 ## Architecture

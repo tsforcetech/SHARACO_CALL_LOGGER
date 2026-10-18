@@ -24,6 +24,9 @@ import {
   Search,
 } from "lucide-react";
 import { firebase, api, Row } from "../lib/firebase";
+import { PhoneRequest } from "./phone-request";
+import { ImportLeads } from "./import-leads";
+import { watchRows } from "../lib/spark";
 type Company = { id: string; name: string; role: string; status: string };
 const labels: Record<string, string> = {
   leads: "My leads",
@@ -148,8 +151,11 @@ export default function Page() {
     setRows([]);
     setSelected(null);
     setSearch("");
-    void load();
-  }, [load]);
+    if (!company || !role || !user) return;
+    return watchRows(company, tab, user.uid, admin, (items, cursor) => {
+      setRows(items); setNext(cursor); setError("");
+    }, e => { setRows([]); setError(String(e)); });
+  }, [company, role, tab, user, admin]);
   async function action(fn: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -443,7 +449,8 @@ export default function Page() {
                   <button disabled={busy || !online}>Create campaign</button>
                 </form>
               )}
-              {admin && tab === "leads" && (
+            {admin && tab === "leads" && <ImportLeads key={company} company={company} onComplete={() => void load()} />}
+            {admin && tab === "leads" && (
                 <div className="callout">
                   <div>
                     <strong>Prepare your calling workspace</strong>
@@ -612,11 +619,7 @@ export default function Page() {
             <div className="callout">
               <Phone size={22} />
               <div>
-                <strong>Use your Android phone for the call</strong>
-                <p>
-                  Web-to-phone pairing is not available in this development
-                  build.
-                </p>
+                <PhoneRequest company={company} lead={selected.id} />
               </div>
             </div>
             <h3>Record the outcome</h3>
