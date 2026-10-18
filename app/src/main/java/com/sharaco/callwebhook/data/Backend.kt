@@ -59,10 +59,16 @@ constructor(
         return spark.session()
     }
 
+    suspend fun liveWorkspace(session: Session, filters: Row, sort: String, rows: List<Row>): Row =
+        spark.liveWorkspace(
+            mapOf("companyId" to session.companyId, "filters" to filters, "sort" to sort),
+            rows,
+        )
+
     fun watchCallChanges(
         session: Session,
         filters: Row,
-        changed: () -> Unit,
+        changed: (List<Row>) -> Unit,
         failed: (Exception) -> Unit,
     ): ListenerRegistration {
         var query = firestore.collection("companies/${session.companyId}/call_logs").limit(5001)
@@ -75,7 +81,7 @@ constructor(
             else if (snapshot != null) {
                 // Includes the initial snapshot to cover writes racing the initial report fetch.
                 // Metadata-only events are excluded by the default listener options.
-                changed()
+                changed(snapshot.documents.map { it.data.orEmpty() + ("id" to it.id) })
             }
         }
     }

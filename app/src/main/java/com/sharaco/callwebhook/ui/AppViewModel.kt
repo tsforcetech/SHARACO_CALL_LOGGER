@@ -284,20 +284,43 @@ constructor(
             backend.watchCallChanges(
                 session,
                 filters.payload(session.zone),
-                changed = {
+                changed = { rows ->
                     liveRefreshJob?.cancel()
                     liveRefreshJob =
                         viewModelScope.launch {
-                            delay(
-                                500
-                            ) // Coalesce one uploaded batch instead of refetching for every call.
-                            if (
-                                mutable.value.session?.companyId == session.companyId &&
-                                    mutable.value.session?.uid == session.uid &&
-                                    mutable.value.filters == filters
-                            ) {
-                                refreshReport()
-                                loadCalls()
+                            delay(500)
+                            val sort = mutable.value.sort
+                            try {
+                                // Reuse the listener's call documents: never download the full
+                                // range
+                                // again for each new call. Both views use the same snapshot.
+                                reportJob?.cancel()
+                                callsJob?.cancel()
+                                val data =
+                                    backend.liveWorkspace(
+                                        session,
+                                        filters.payload(session.zone),
+                                        sort,
+                                        rows,
+                                    )
+                                if (
+                                    mutable.value.session?.companyId == session.companyId &&
+                                        mutable.value.session?.uid == session.uid &&
+                                        mutable.value.filters == filters &&
+                                        mutable.value.sort == sort
+                                ) {
+                                    mutable.update {
+                                        it.copy(
+                                            report = data.row("report"),
+                                            calls = data.rows("calls"),
+                                            hasMore = false,
+                                            cursor = null,
+                                        )
+                                    }
+                                }
+                            } catch (error: Exception) {
+                                if (error is CancellationException) throw error
+                                message(humanError(error))
                             }
                         }
                 },

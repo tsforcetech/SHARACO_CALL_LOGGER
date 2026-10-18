@@ -274,7 +274,7 @@ constructor(private val auth: FirebaseAuth, private val db: FirebaseFirestore) {
         return emptyMap()
     }
 
-    suspend fun calls(data: Row): List<Row> {
+    suspend fun calls(data: Row, snapshotRows: List<Row>? = null): List<Row> {
         val cid = data.str("companyId")
         val member =
             path(cid)
@@ -306,22 +306,26 @@ constructor(private val auth: FirebaseAuth, private val db: FirebaseFirestore) {
             else emptySet()
         if (f.num("from") > 0) q = q.whereGreaterThanOrEqualTo("startedAt", f.num("from"))
         if (f.num("to") > 0) q = q.whereLessThan("startedAt", f.num("to"))
-        val docs = q.limit(5001).get(Source.SERVER).await().documents
+        val docs =
+            snapshotRows
+                ?: q.limit(5001).get(Source.SERVER).await().documents.map {
+                    it.data.orEmpty() + ("id" to it.id)
+                }
         check(docs.size <= 5000) {
             "More than 5,000 calls. Narrow the date range for a complete report. Code: REPORT_LIMIT"
         }
         return docs
-            .map { d ->
-                val c = d.data.orEmpty()
+            .map { c ->
                 c +
                     mapOf(
-                        "id" to d.id,
+                        "id" to c.str("id"),
                         "employeeUid" to c.str("uid"),
                         "callType" to c.str("type"),
                         "callTimestamp" to c.num("startedAt"),
                         "durationSeconds" to c.num("durationSec"),
                         "phoneNumber" to c.str("remoteNumber"),
                         "employeeName" to profiles[c.str("uid")].orEmpty().str("name"),
+                        "memberProfile" to profiles[c.str("uid")].orEmpty(),
                         "syncStatus" to "SYNCED",
                     )
             }
@@ -351,22 +355,21 @@ constructor(private val auth: FirebaseAuth, private val db: FirebaseFirestore) {
             }
     }
 
-    suspend fun report(data: Row): Row {
-        val rows = calls(data)
+    suspend fun liveWorkspace(data: Row, snapshotRows: List<Row>): Row {
+        val rows = calls(data, snapshotRows)
+        return mapOf("calls" to rows, "report" to reportRows(rows))
+    }
+
+    suspend fun report(data: Row): Row = reportRows(calls(data))
+
+    private fun reportRows(rows: List<Row>): Row {
         return mapOf(
             "metrics" to metrics(rows),
             "staff" to
                 rows
                     .groupBy { it.str("uid") }
                     .map { (uid, calls) ->
-                        val m =
-                            path(data.str("companyId"))
-                                .collection("members")
-                                .document(uid)
-                                .get(Source.SERVER)
-                                .await()
-                                .data
-                                .orEmpty()
+                        val m = calls.firstOrNull()?.row("memberProfile").orEmpty()
                         m + metrics(calls) + mapOf("id" to uid)
                     },
             "timeline" to emptyList<Row>(),
