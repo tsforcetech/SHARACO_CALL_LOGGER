@@ -416,29 +416,34 @@ constructor(
         val s = mutable.value.session ?: return@task
         val config = prefs.config(s.uid)
         check(reader.permitted()) { "Enable call history permission first." }
-        backend.call(
-            "registerDevice",
-            mapOf(
-                "companyId" to s.companyId,
-                "deviceId" to config.installation,
-                "manufacturer" to Build.MANUFACTURER,
-                "model" to Build.MODEL,
-                "androidVersion" to Build.VERSION.RELEASE,
-                "appVersion" to BuildConfig.VERSION_NAME,
-                "callLogPermission" to reader.permitted(),
-                "notificationPermission" to engine.notifications(),
-                "replace" to replace,
-            ),
-        )
+        val policy =
+            backend.call(
+                "registerDevice",
+                mapOf(
+                    "companyId" to s.companyId,
+                    "deviceId" to config.installation,
+                    "manufacturer" to Build.MANUFACTURER,
+                    "model" to Build.MODEL,
+                    "androidVersion" to Build.VERSION.RELEASE,
+                    "appVersion" to BuildConfig.VERSION_NAME,
+                    "callLogPermission" to reader.permitted(),
+                    "notificationPermission" to engine.notifications(),
+                    "replace" to replace,
+                    "consent" to true,
+                ),
+            )
         if (config.company != s.companyId || config.uid != s.uid) engine.reset()
         prefs.edit {
             it[Preferences.company] = s.companyId
             it[Preferences.uid] = s.uid
-            it[Preferences.initial] = s.member.num("initialSyncFrom")
-            it[Preferences.retention] = s.company.num("retentionDays")
+            it[Preferences.initial] = policy.num("initialSyncFrom")
+            it[Preferences.retention] = policy.num("retentionDays")
         }
         SyncWork.schedule(context)
-        message("Device registered. Synchronization is scheduled.")
+        message("Device registered. Reading phone call history now…")
+        engine.sync()
+        loadCalls()
+        refreshReport()
     }
 
     fun syncNow() = task {

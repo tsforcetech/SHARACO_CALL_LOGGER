@@ -112,6 +112,11 @@ fun SyncScreen(state: AppState, model: AppViewModel) {
                 style = MaterialTheme.typography.titleLarge,
             )
             Text(state.syncPhase)
+            Text("Device calls loaded: ${number(state.local.size.toLong())}")
+            if (!active)
+                Text(
+                    "Phone call history is read after consent, permission and successful device registration."
+                )
             Text("Pending calls: ${number(state.pending.toLong())}")
             Text("Last successful sync: ${dateTime(state.lastSuccess, s.zone)}")
             Text("Network: ${if (online) "Online" else "Offline — calls remain queued"}")

@@ -4,7 +4,7 @@ const app = files('app/src/main/java').filter(p=>p.endsWith('.kt')).map(p=>readF
 const refs = [...new Set([...app.matchAll(/(?:backend\.call|model\.action|\.getHttpsCallable)\(\s*"(\w+)"/g)].map(m=>m[1]))].sort();
 const source = files('functions/src').map(p=>readFileSync(p,'utf8')).join('\n');
 const exports = [...source.matchAll(/export const (\w+) = callable/g)].map(m=>m[1]);
-const direct = ['createCompany','saveEmployee','createInvite','inspectInvite','joinCompany','approveJoin','revokeInvite','getReport','listCalls'];
+const direct = ['registerDevice','deviceHeartbeat','ingestCalls','createCompany','saveEmployee','createInvite','inspectInvite','joinCompany','approveJoin','revokeInvite','getReport','listCalls'];
 console.log(JSON.stringify(refs.map(name=>({name,transport:direct.includes(name)?'Firestore':'Callable',sourceExport:exports.includes(name)})),null,2));
 if(process.argv.includes('--live')) {
  await Promise.all(refs.filter(n=>n!=='approveJoin').map(async name=>{

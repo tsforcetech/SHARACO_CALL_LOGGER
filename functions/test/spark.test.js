@@ -89,6 +89,47 @@ test('Spark onboarding: atomic creation, invitations, approval, isolation and ad
    await assertFails(getDoc(ref(intruder,'users/staff/companies/c')));
    await assertFails(updateDoc(ref(staff,'companies/c/members/staff'),{role:'owner'}));
   });
+  await t.test('Spark devices and sync: atomic registration, replacement, retries and isolation',async()=>{
+   const did='11111111-1111-1111-1111-111111111111', newer='22222222-2222-2222-2222-222222222222';
+   const initial=Date.now()-3600000;
+   const mr='companies/c/members/staff';
+   const dp=id=>`companies/c/devices/staff_${id}`;
+   const device=id=>({uid:'staff',deviceId:id,employeeName:'staff',manufacturer:'Google',model:'Pixel',androidVersion:'17',appVersion:'4.1.1',status:'active',registeredAt:serverTimestamp(),consentAt:serverTimestamp(),lastSeen:serverTimestamp(),callLogPermission:true,notificationPermission:true,pendingRecordCount:0,lastSyncError:'',lastSyncAttemptStatus:'REGISTERED'});
+   const register=(id,replace=false)=>{const b=writeBatch(staff);b.set(ref(staff,dp(id)),device(id));b.update(ref(staff,mr),{activeDeviceId:id,initialSyncFrom:initial});if(replace)b.update(ref(staff,dp(did)),{status:'inactive'});return b.commit();};
+   await assertFails(setDoc(ref(staff,dp(did)),device(did)));
+   await assertFails(updateDoc(ref(staff,mr),{activeDeviceId:did,initialSyncFrom:initial}));
+   await assertFails(setDoc(ref(intruder,dp(did)),device(did)));
+   await assertSucceeds(register(did));
+   await assertSucceeds(getDoc(ref(staff,dp(did))));
+   await assertSucceeds(getDocs(query(collection(staff,'companies/c/devices'),where('uid','==','staff'))));
+   await assertFails(updateDoc(ref(staff,mr),{initialSyncFrom:0}));
+   await assertFails(updateDoc(ref(staff,mr),{role:'admin',activeDeviceId:did}));
+   await assertSucceeds(updateDoc(ref(staff,dp(did)),{lastSeen:serverTimestamp(),lastSuccessfulSyncAt:serverTimestamp(),lastSyncAttemptStatus:'SUCCESS'}));
+   const call=(id,dev=did)=>({uid:'staff',companyId:'c',sim:'',remoteNumber:'+971500000000',contactName:'',type:'OUTGOING',startedAt:Date.now()-1000,durationSec:12,createdAt:serverTimestamp(),deviceCallId:id,deviceId:dev});
+   // Transactional client needs to read missing IDs before creating them.
+   await assertSucceeds(getDoc(ref(staff,'companies/c/call_logs/missing')));
+   const batch=writeBatch(staff);for(let i=0;i<100;i++)batch.set(ref(staff,`companies/c/call_logs/sync${i}`),call(`sync${i}`));
+   await assertSucceeds(batch.commit());
+   await assertSucceeds(updateDoc(ref(staff,'companies/c/call_logs/sync0'),{durationSec:12,type:'OUTGOING'}));
+   await assertSucceeds(updateDoc(ref(staff,'companies/c/call_logs/sync0'),{durationSec:25}));
+   await assertFails(updateDoc(ref(staff,'companies/c/call_logs/sync0'),{uid:'owner'}));
+   await assertFails(updateDoc(ref(staff,'companies/c/call_logs/sync0'),{startedAt:Date.now()}));
+   await assertFails(setDoc(ref(staff,'companies/c/call_logs/backdated'),{...call('backdated'),startedAt:initial-1}));
+   await assertFails(setDoc(ref(staff,'companies/c/call_logs/future'),{...call('future'),startedAt:Date.now()+3600000}));
+   await assertFails(setDoc(ref(staff,'companies/c/call_logs/other'),{...call('other'),uid:'owner'}));
+   await assertFails(getDoc(ref(intruder,'companies/c/call_logs/sync0')));
+   await assertSucceeds(getDoc(ref(owner,'companies/c/call_logs/sync0')));
+   await assertFails(register(newer)); // Replacing requires atomic revocation of the old device.
+   await assertSucceeds(register(newer,true));
+   await assertFails(updateDoc(ref(staff,dp(did)),{lastSeen:serverTimestamp(),status:'active'}));
+   await assertFails(setDoc(ref(staff,'companies/c/call_logs/old'),call('old')));
+   await assertFails(updateDoc(ref(staff,'companies/c/call_logs/sync0'),{durationSec:30}));
+   await assertSucceeds(setDoc(ref(staff,'companies/c/call_logs/new'),call('new',newer)));
+   await assertSucceeds(updateDoc(ref(owner,mr),{approved:false}));
+   await assertFails(updateDoc(ref(staff,dp(newer)),{lastSeen:serverTimestamp()}));
+   await assertFails(setDoc(ref(staff,'companies/c/call_logs/revoked'),call('revoked',newer)));
+   await assertSucceeds(updateDoc(ref(owner,mr),{approved:true}));
+  });
   await t.test('revoked and expired invitations cannot be claimed, legacy token is not a bypass',async()=>{
    await env.withSecurityRulesDisabled(async c=>{
     const db=c.firestore(); const i=(await getDoc(ref(db,`invitations/${code}`))).data();

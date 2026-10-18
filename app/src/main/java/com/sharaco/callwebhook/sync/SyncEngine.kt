@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.functions.FirebaseFunctionsException
 import com.sharaco.callwebhook.BuildConfig
 import com.sharaco.callwebhook.data.*
@@ -79,12 +80,18 @@ constructor(
                     if (e is CancellationException) throw e
                     val underlying = e.backendCause()
                     if (
-                        underlying is FirebaseFunctionsException &&
+                        (underlying is FirebaseFirestoreException &&
                             underlying.code in
                                 listOf(
-                                    FirebaseFunctionsException.Code.PERMISSION_DENIED,
-                                    FirebaseFunctionsException.Code.UNAUTHENTICATED,
-                                )
+                                    FirebaseFirestoreException.Code.PERMISSION_DENIED,
+                                    FirebaseFirestoreException.Code.UNAUTHENTICATED,
+                                )) ||
+                            underlying is FirebaseFunctionsException &&
+                                underlying.code in
+                                    listOf(
+                                        FirebaseFunctionsException.Code.PERMISSION_DENIED,
+                                        FirebaseFunctionsException.Code.UNAUTHENTICATED,
+                                    )
                     )
                         throw e
                 }
@@ -139,8 +146,14 @@ constructor(
                 prefs.edit { it[Preferences.error] = message }
                 phaseState.value = message
                 if (
-                    underlying is FirebaseFunctionsException &&
-                        underlying.code == FirebaseFunctionsException.Code.PERMISSION_DENIED
+                    (underlying is FirebaseFirestoreException &&
+                        underlying.code in
+                            listOf(
+                                FirebaseFirestoreException.Code.PERMISSION_DENIED,
+                                FirebaseFirestoreException.Code.UNAUTHENTICATED,
+                            )) ||
+                        underlying is FirebaseFunctionsException &&
+                            underlying.code == FirebaseFunctionsException.Code.PERMISSION_DENIED
                 ) {
                     dao.clear()
                     prefs.clearSession()

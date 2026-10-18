@@ -18,6 +18,23 @@ service cloud.firestore {
    && jr(cid, uid).status == 'approved' && ix(cid, uid).status == 'approved' && ix(cid, uid).role == 'employee'; }
   function canReadCall(cid) { return admin(cid) || (active(cid) && (resource.data.uid == request.auth.uid
    || member(cid, request.auth.uid).get('assignedUsers', []).hasAny([resource.data.uid]))); }
+  function device(cid, uid, did) { return get(/databases/$(database)/documents/companies/$(cid)/devices/$(uid + '_' + did)).data; }
+  function deviceAfter(cid, uid, did) { return getAfter(/databases/$(database)/documents/companies/$(cid)/devices/$(uid + '_' + did)).data; }
+  function currentDevice(cid, did) { return active(cid) && member(cid, request.auth.uid).activeDeviceId == did
+   && device(cid, request.auth.uid, did).uid == request.auth.uid && device(cid, request.auth.uid, did).status == 'active'; }
+  function deviceShape(d) { return d.keys().hasOnly(['uid','deviceId','employeeName','manufacturer','model','androidVersion','appVersion','status','registeredAt','consentAt','lastSeen','callLogPermission','notificationPermission','pendingRecordCount','lastSyncError','lastSyncAttemptStatus','lastSuccessfulSyncAt'])
+   && d.deviceId.matches('[0-9a-fA-F-]{36}') && d.model is string && d.model.size() <= 100
+   && d.manufacturer is string && d.manufacturer.size() <= 100 && d.androidVersion is string && d.androidVersion.size() <= 50
+   && d.appVersion is string && d.appVersion.size() <= 50 && d.callLogPermission is bool && d.notificationPermission is bool
+   && d.pendingRecordCount is int && d.pendingRecordCount >= 0 && d.lastSyncError is string && d.lastSyncError.size() <= 500
+   && d.lastSyncAttemptStatus is string && d.lastSyncAttemptStatus.size() <= 100; }
+  function callShape(cid, callId, d) { return d.uid == request.auth.uid && d.companyId == cid
+   && currentDevice(cid, d.deviceId) && d.deviceCallId == callId
+   && d.type in ['INCOMING','OUTGOING','MISSED','REJECTED','BLOCKED','VOICEMAIL','ANSWERED_EXTERNALLY','UNKNOWN','OTHER']
+   && d.startedAt is int && d.startedAt >= member(cid, request.auth.uid).initialSyncFrom && d.startedAt <= request.time.toMillis() + 300000
+   && d.durationSec is int && d.durationSec >= 0 && d.durationSec <= 604800
+   && d.remoteNumber is string && d.remoteNumber.size() <= 100 && d.contactName is string && d.contactName.size() <= 200
+   && d.keys().hasOnly(['uid','companyId','sim','fromNumber','toNumber','remoteNumber','contactName','type','startedAt','durationSec','createdAt','deviceCallId','deviceId']); }
   match /companies/{cid} {
    allow create: if verified()
     && request.resource.data.keys().hasOnly(['name','ownerUid','createdAt','joinToken'])
@@ -50,7 +67,18 @@ service cloud.firestore {
       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role','approved'])
       && request.resource.data.role in ['employee','admin','supervisor'] && request.resource.data.approved is bool)
      || (active(cid) && uid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sim'])
-      && request.resource.data.sim.matches('\\+[0-9]{8,15}'));
+      && request.resource.data.sim.matches('\\+[0-9]{8,15}'))
+     || (active(cid) && uid == request.auth.uid
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activeDeviceId','initialSyncFrom'])
+      && request.resource.data.activeDeviceId.matches('[0-9a-fA-F-]{36}')
+      && request.resource.data.initialSyncFrom is int
+      && ((resource.data.get('initialSyncFrom',0) == 0 && request.resource.data.initialSyncFrom >= request.time.toMillis() - 86400000 && request.resource.data.initialSyncFrom <= request.time.toMillis())
+       || (resource.data.get('initialSyncFrom',0) > 0 && request.resource.data.initialSyncFrom == resource.data.initialSyncFrom))
+      && deviceAfter(cid, uid, request.resource.data.activeDeviceId).uid == uid
+      && deviceAfter(cid, uid, request.resource.data.activeDeviceId).status == 'active'
+      && deviceAfter(cid, uid, request.resource.data.activeDeviceId).lastSeen == request.time
+      && (resource.data.get('activeDeviceId','') == '' || resource.data.activeDeviceId == request.resource.data.activeDeviceId
+       || deviceAfter(cid, uid, resource.data.activeDeviceId).status == 'inactive'));
     allow delete: if owner(cid) && uid != request.auth.uid;
    }
    match /employees/{eid} {
@@ -92,23 +120,31 @@ service cloud.firestore {
    match /devices/{deviceId} {
     allow get: if admin(cid) || (active(cid) && deviceId.matches(request.auth.uid + '_[0-9a-fA-F-]{36}'));
     allow list: if admin(cid) || (active(cid) && resource.data.uid == request.auth.uid);
-    allow create: if active(cid) && request.resource.data.uid == request.auth.uid
-     && request.resource.data.keys().hasOnly(['uid','model','androidVersion','lastSeen','status']) && request.resource.data.status == 'active';
-    allow update: if admin(cid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-     && request.resource.data.status in ['active','inactive'];
-    allow delete: if owner(cid);
+    allow create: if active(cid) && deviceShape(request.resource.data)
+     && request.resource.data.uid == request.auth.uid && deviceId == request.auth.uid + '_' + request.resource.data.deviceId
+     && request.resource.data.employeeName == member(cid, request.auth.uid).name
+     && request.resource.data.status == 'active' && request.resource.data.callLogPermission == true
+     && request.resource.data.registeredAt == request.time && request.resource.data.consentAt == request.time
+     && request.resource.data.lastSeen == request.time && !request.resource.data.keys().hasAny(['lastSuccessfulSyncAt'])
+     && ma(cid, request.auth.uid).activeDeviceId == request.resource.data.deviceId;
+    allow update: if (admin(cid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) && request.resource.data.status == 'inactive')
+     || (active(cid) && resource.data.uid == request.auth.uid && request.resource.data.uid == resource.data.uid
+      && request.resource.data.deviceId == resource.data.deviceId && deviceShape(request.resource.data)
+      && ((request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) && request.resource.data.status == 'inactive'
+        && ma(cid, request.auth.uid).activeDeviceId != resource.data.deviceId)
+       || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['employeeName','manufacturer','model','androidVersion','appVersion','status','lastSeen','callLogPermission','notificationPermission','pendingRecordCount','lastSyncError','lastSyncAttemptStatus','lastSuccessfulSyncAt'])
+        && request.resource.data.status == 'active' && ma(cid, request.auth.uid).activeDeviceId == resource.data.deviceId
+        && request.resource.data.lastSeen == request.time && request.resource.data.employeeName == member(cid, request.auth.uid).name
+        && (resource.data.status == 'active' || request.resource.data.callLogPermission == true)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastSuccessfulSyncAt']) || request.resource.data.lastSuccessfulSyncAt == request.time))));
    }
    match /call_logs/{callId} {
-    allow get, list: if canReadCall(cid);
-    allow create: if active(cid) && request.resource.data.uid == request.auth.uid && request.resource.data.companyId == cid
-     && request.resource.data.sim == member(cid, request.auth.uid).sim
-     && request.resource.data.deviceId is string && request.resource.data.deviceId.size() >= 20
-     && get(/databases/$(database)/documents/companies/$(cid)/devices/$(request.auth.uid + '_' + request.resource.data.deviceId)).data.status == 'active'
-     && get(/databases/$(database)/documents/companies/$(cid)/devices/$(request.auth.uid + '_' + request.resource.data.deviceId)).data.uid == request.auth.uid
-     && request.resource.data.deviceCallId == callId
-     && request.resource.data.type in ['INCOMING','OUTGOING','MISSED','REJECTED','BLOCKED','VOICEMAIL','ANSWERED_EXTERNALLY','OTHER']
-     && request.resource.data.startedAt is int && request.resource.data.durationSec is int && request.resource.data.durationSec >= 0
-     && request.resource.data.keys().hasOnly(['uid','companyId','sim','fromNumber','toNumber','remoteNumber','contactName','type','startedAt','durationSec','createdAt','deviceCallId','deviceId']);
+    allow get: if canReadCall(cid) || (active(cid) && !exists(/databases/$(database)/documents/companies/$(cid)/call_logs/$(callId)));
+    allow list: if canReadCall(cid);
+    allow create: if callShape(cid, callId, request.resource.data)
+     && request.resource.data.sim == member(cid, request.auth.uid).sim && request.resource.data.createdAt == request.time;
+    allow update: if callShape(cid, callId, request.resource.data)
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['type','durationSec']);
    }
    match /assigned_numbers/{itemId} {
     allow get, list: if admin(cid) || (active(cid) && resource.data.assignedTo == request.auth.uid);

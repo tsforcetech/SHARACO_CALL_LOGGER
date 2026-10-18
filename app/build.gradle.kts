@@ -15,8 +15,8 @@ android {
         applicationId = "com.sharaco.callwebhook"
         minSdk = 26
         targetSdk = 37
-        versionCode = 103
-        versionName = "4.1.0"
+        versionCode = 104
+        versionName = "4.1.1"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
@@ -77,4 +77,5 @@ dependencies {
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }

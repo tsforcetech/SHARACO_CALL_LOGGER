@@ -20,11 +20,15 @@ constructor(
     val firestore: FirebaseFirestore,
     private val functions: FirebaseFunctions,
     private val spark: SparkWorkspace,
+    private val sparkSync: SparkSync,
 ) {
     @Suppress("UNCHECKED_CAST")
     suspend fun call(name: String, data: Row = emptyMap()): Row =
         try {
             when (name) {
+                "registerDevice" -> sparkSync.register(data)
+                "deviceHeartbeat" -> sparkSync.heartbeat(data)
+                "ingestCalls" -> sparkSync.ingest(data)
                 "createCompany" -> spark.createCompany(data)
                 "saveEmployee" -> spark.saveEmployee(data)
                 "createInvite" -> spark.createInvite(data)
@@ -69,7 +73,16 @@ constructor(
                     .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
                     .limit(100)
         return query.addSnapshotListener { value, error ->
-            callback(value?.documents?.map { it.data.orEmpty() + ("id" to it.id) }.orEmpty(), error)
+            callback(
+                value
+                    ?.documents
+                    ?.map {
+                        if (collection == "devices") deviceRow(it.id, it.data.orEmpty())
+                        else it.data.orEmpty() + ("id" to it.id)
+                    }
+                    .orEmpty(),
+                error,
+            )
         }
     }
 }
