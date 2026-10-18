@@ -9,3 +9,6 @@ local.properties
 *.keystore
 .env*
 .DS_Store
+
+**/.next/
+**/*.tsbuildinfo

@@ -135,3 +135,7 @@ The signed APK artifact includes `signing-fingerprints.txt`. Check this against 
 Some Google credential providers return a cancellation after account selection because consent or provider setup did not complete. Version 4.0.1 discarded this result silently. Version 4.0.2 displays it immediately, offers an explicit second Credential Manager account-selector flow (all accounts, auto-select disabled), shows the authentication stage, and bounds provider/network waits. It never retries cancelled consent automatically. The live Google provider authorization-URI endpoint accepted the preserved client configuration on 17 October 2026; this does not prove successful authentication on a particular device.
 
 The 4.1.0 correction converts onboarding and dashboard reads to Spark, as documented at the top. Other server operations remain outstanding.
+
+## Phase 2 development — Firebase Spark retained
+
+The additive `server/` Node backend and `web/` Next.js workspace are under development. They reuse the existing Firebase identity and company data. This is not a finished Phase 2 release; Android 4.1.2 remains the delivered app. See [architecture, verified scope, remaining work and deployment prerequisites](docs/PHASE2-SPARK.md).
