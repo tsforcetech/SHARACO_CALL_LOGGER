@@ -61,6 +61,9 @@ fun DashboardContent(
                 "${state.filters.start} · ${s.zone}",
                 "Selected period",
             )
+        OutlinedButton({ navigate("crmReports") }, modifier = Modifier.fillMaxWidth()) {
+            Text("Targets & assigned-lead performance")
+        }
         ReportFilters(state, onFilters)
         if (!s.manager && !state.permission)
             Hint("Call history access disabled. Open Sync to enable permission.", true)

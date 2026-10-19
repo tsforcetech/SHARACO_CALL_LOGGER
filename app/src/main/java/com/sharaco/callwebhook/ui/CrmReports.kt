@@ -147,7 +147,13 @@ private fun CrmReportsContent(s: Session, navigate: (String) -> Unit) {
                     listOf(name(uid), data["leads"].orEmpty().count { it.str("assignedTo") == uid }.toString()) + crmMetrics.keys.map { "%.1f".format(targetAchievement(it, c, a)) }
                 }
                 Panel("Employee performance") {
-                    rows.forEach { row -> Text("${row[0]} · ${row[1]} assigned · ${row[2]} calls · ${row.last()} converted") }
+                    val tableRows: List<com.sharaco.callwebhook.domain.Row> = uids.map { uid ->
+                        val c = calls.filter { it.str("uid") == uid }
+                        val a = attempts.filter { it.str("employeeUid") == uid }
+                        mapOf("name" to name(uid), "assigned" to data["leads"].orEmpty().count { it.str("assignedTo") == uid }) + crmMetrics.keys.associateWith { targetAchievement(it, c, a) }
+                    }
+                    DataTable(tableRows, TableColumn("Employee", "name") { it.str("name") },
+                        listOf(TableColumn("Assigned now", "assigned") { number(it.num("assigned")) }) + crmMetrics.map { (key, label) -> TableColumn(label, key) { "%.1f".format(it.dec(key)) } }) { }
                     listOf(false, true).forEach { pdf -> TextButton({ scope.launch { try { ReportExport.share(context, "CRM_performance", listOf("Employee", "Assigned now") + crmMetrics.values, rows, pdf) } catch (e: Exception) { failed(e) } } }) { Text(if (pdf) "Export PDF" else "Export CSV") } }
                 }
             }
