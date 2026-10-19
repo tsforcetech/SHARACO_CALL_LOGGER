@@ -21,7 +21,7 @@ export function Reports({company,uid,admin,view}:{company:string;uid:string;admi
   setCalls([]);setAttempts([]);setTargets([]);setMembers([]);setErrors({});setLoaded({});setPage(1);
   if(!valid)return;
   const db=firebase().db;
-  const listen=(name:string,constraints:any[],setter:(r:Row[])=>void)=>onSnapshot(query(collection(db,'companies',company,name),...constraints,limit(10001)),s=>{
+  const listen=(name:string,constraints:any[],setter:(r:Row[])=>void)=>onSnapshot(query(collection(db,'companies',company,name),...constraints,limit(10000)),s=>{
    setter(s.docs.map(d=>({...plain(d.data()),id:d.id})));setLoaded(v=>({...v,[name]:true}));setErrors(v=>({...v,[name]:''}));
   },e=>{setter([]);setErrors(v=>({...v,[name]:`${name}: ${e.code} — ${e.message}`}));});
   const stops=[
@@ -33,7 +33,7 @@ export function Reports({company,uid,admin,view}:{company:string;uid:string;admi
   return ()=>stops.forEach(stop=>stop());
  },[company,uid,admin,selected,start,end,valid]);
  const name=(id:unknown)=>members.find(m=>m.id===id)?.name|| (id===uid?'You':id);
- const truncated=[calls,attempts,targets,members].some(r=>r.length>=10001);
+ const truncated=[calls,attempts,targets,members].some(r=>r.length>=10000);
  const complete=loaded.call_logs&&loaded.crmCallAttempts&&!errors.call_logs&&!errors.crmCallAttempts&&!truncated;
  const summary=(metric:string,c=calls,a=attempts)=>achieved(metric,c,a).toLocaleString(undefined,{maximumFractionDigits:1});
  const filtered=calls.filter(c=>(!type||c.type===type)&&`${c.remoteNumber} ${c.contactName}`.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>number(b,'startedAt')-number(a,'startedAt'));
@@ -63,7 +63,7 @@ export function Reports({company,uid,admin,view}:{company:string;uid:string;admi
   </div>
   {!valid&&<div className="error">Choose a valid date range of up to 93 days.</div>}
   {Object.values(errors).filter(Boolean).map(e=><div role="alert" className="error" key={e}>{e}</div>)}
-  {truncated&&<div className="error">This range exceeds 10,000 records. Narrow the date range or select one employee. Totals are incomplete.</div>}
+  {truncated&&<div className="error">The query reached the 10,000-record limit and may be incomplete. Narrow the date range or select one employee. Totals are hidden until the complete result fits.</div>}
   <p>Device call history is separate from manually recorded CRM outcomes. Connected means an incoming or outgoing call with recorded duration above zero. Only calls already synced by Android appear here.</p>
   <div className="stats-grid">{Object.entries(metrics).map(([k,label])=><article key={k} className="stat-card"><span>{label}</span><strong>{complete?summary(k):'—'}</strong><small>{complete?'Selected period':'Waiting for complete data'}</small></article>)}</div>
   {view==='targetDefinitions'&&admin&&<form className="form-card report-filters" onSubmit={save}>

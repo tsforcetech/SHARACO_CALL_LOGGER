@@ -29,7 +29,7 @@ Keep existing indexes when prompted. The added composite index is COLLECTION sco
 The existing call_logs index (uid ASCENDING, startedAt ASCENDING) is also required.
 No rule changes are required beyond the previously supplied CRM rules.
 
-Reports allow at most 93 days and fetch at most 10,001 records per collection.
+Reports allow at most 93 days and fetch at most 10,000 records per collection.
 At that threshold totals are suppressed and the user must narrow their filters.
 Firestore listener reads count against Spark quotas; large team reports can consume
 substantial reads. Historical periods update live while the page is open.
