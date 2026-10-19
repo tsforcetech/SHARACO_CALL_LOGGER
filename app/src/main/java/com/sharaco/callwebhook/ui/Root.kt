@@ -141,6 +141,7 @@ fun CallTrackRoot(model: AppViewModel) {
                                     }
                                     composable("calls") { CallsScreen(state, model) }
                                     composable("crm") { CrmScreen(state) }
+                                    composable("crmReports") { CrmReportsScreen(state, ::navigate) }
                                     composable("sync") { SyncScreen(state, model) }
                                     composable("settings") {
                                         SettingsScreen(state, model, ::navigate)

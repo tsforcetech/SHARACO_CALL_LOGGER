@@ -34,6 +34,7 @@ fun ReportsScreen(state: AppState, model: AppViewModel, navigate: (String) -> Un
     val scope = rememberCoroutineScope()
     var selected by remember { mutableStateOf<Row?>(null) }
     Page("Staff performance", "Tap a heading to sort. Tap a person to inspect their performance.") {
+        TextButton({ navigate("crmReports") }) { Text("Targets, assigned leads & CRM reports") }
         ReportFilters(state, model)
         if (rows.isEmpty())
             Hint(if (state.busy > 0) "Loading report…" else "No employees match this report.")

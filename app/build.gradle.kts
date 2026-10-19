@@ -15,8 +15,8 @@ android {
         applicationId = "com.sharaco.callwebhook"
         minSdk = 26
         targetSdk = 37
-        versionCode = 106
-        versionName = "4.2.0-dev"
+        versionCode = 107
+        versionName = "4.3.0-dev"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {

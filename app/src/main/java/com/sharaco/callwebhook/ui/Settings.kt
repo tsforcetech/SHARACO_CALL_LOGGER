@@ -71,6 +71,7 @@ fun SettingsScreen(state: AppState, model: AppViewModel, navigate: (String) -> U
         "${s.member.str("name")} · ${s.member.str("email")}",
     ) {
         Panel("Your account") {
+            TextButton({ navigate("crmReports") }) { Text("Targets & lead reports") }
             TextButton({ navigate("crm") }) { Text("My leads & calling workspace") }
             Text("${s.company.str("name")} · ${s.role}")
             if (s.member.str("code").isNotEmpty()) Text("Employee ID: ${s.member.str("code")}")
