@@ -27,8 +27,13 @@ import { firebase, api, Row } from "../lib/firebase";
 import { PhoneRequest } from "./phone-request";
 import { ImportLeads } from "./import-leads";
 import { watchRows } from "../lib/spark";
+import { Reports } from "./reports";
+const reportTabs = ['dashboard', 'callHistory', 'reports', 'targetDefinitions'];
 type Company = { id: string; name: string; role: string; status: string };
 const labels: Record<string, string> = {
+  dashboard: "Dashboard",
+  callHistory: "Call history",
+  reports: "Call reports",
   leads: "My leads",
   campaigns: "Campaigns",
   targetDefinitions: "Targets",
@@ -45,7 +50,7 @@ export default function Page() {
     [company, setCompany] = useState(""),
     [role, setRole] = useState(""),
     [error, setError] = useState(""),
-    [tab, setTab] = useState("leads"),
+    [tab, setTab] = useState("dashboard"),
     [rows, setRows] = useState<Row[]>([]),
     [next, setNext] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
@@ -68,6 +73,8 @@ export default function Page() {
         setUser(u);
         setReady(true);
         setCompany("");
+        setRole("");
+        setSelected(null);
         setRows([]);
       });
     } catch (e) {
@@ -126,7 +133,7 @@ export default function Page() {
   }, [company, user]);
   const load = useCallback(
     async (after = "") => {
-      if (!company || !role) return;
+      if (!company || !role || reportTabs.includes(tab)) return;
       const gen = generation.current;
       setBusy(true);
       try {
@@ -151,7 +158,7 @@ export default function Page() {
     setRows([]);
     setSelected(null);
     setSearch("");
-    if (!company || !role || !user) return;
+    if (!company || !role || !user || reportTabs.includes(tab)) return;
     return watchRows(company, tab, user.uid, admin, (items, cursor) => {
       setRows(items); setNext(cursor); setError("");
     }, e => { setRows([]); setError(String(e)); });
@@ -311,9 +318,7 @@ export default function Page() {
           {Object.entries(labels)
             .filter(([key]) => admin || key !== "campaigns")
             .map(([key, label], i) => {
-              const Icon = [Users, Building2, Target, CalendarClock, History][
-                i
-              ];
+              const Icon = key === 'dashboard' ? LayoutDashboard : key === 'targetDefinitions' ? Target : key === 'campaigns' ? Building2 : key === 'followUps' ? CalendarClock : key === 'leads' ? Users : History;
               return (
                 <button
                   key={key}
@@ -404,14 +409,14 @@ export default function Page() {
                       : "Keep your team’s work connected and up to date."}
                   </p>
                 </div>
-                <button
+                {!reportTabs.includes(tab) && <button
                   className="secondary"
                   disabled={busy || !online}
                   onClick={() => load()}
                 >
                   <RefreshCw size={16} />
                   Refresh
-                </button>
+                </button>}
               </div>
               {error && (
                 <div role="alert" className="error">
@@ -475,7 +480,8 @@ export default function Page() {
                   </button>
                 </div>
               )}
-              <section className="table-card">
+              {reportTabs.includes(tab) && role && <Reports key={`${company}:${user.uid}:${role}`} company={company} uid={user.uid} admin={admin} view={tab} />}
+              {!reportTabs.includes(tab) && <section className="table-card">
                 <div className="table-toolbar">
                   <strong>
                     {labels[tab]}{" "}
@@ -592,7 +598,7 @@ export default function Page() {
                     Load more
                   </button>
                 )}
-              </section>
+              </section>}
             </>
           )}
         </main>

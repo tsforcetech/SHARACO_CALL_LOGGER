@@ -30,6 +30,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --prefix web
+      - run: node --experimental-strip-types --test web/test/*.test.mjs
       - run: npm run build --prefix web
       - uses: actions/upload-pages-artifact@v4
         with:

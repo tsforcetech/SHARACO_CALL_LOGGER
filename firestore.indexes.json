@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "crmCallAttempts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "callRequests", "queryScope": "COLLECTION",
       "fields": [
         {"fieldPath": "employeeUid", "order": "ASCENDING"},
