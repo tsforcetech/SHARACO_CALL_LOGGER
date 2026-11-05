@@ -69,6 +69,7 @@ export default function Page() {
   const dialogRef = useRef<HTMLElement>(null);
   const visibleRows = rows.filter(r => tab !== "leads" || queueView === "all" || (queueView === "pending" ? pendingLead(r) : !pendingLead(r))).filter(r => JSON.stringify(r).toLowerCase().includes(search.toLowerCase()));
   useEffect(() => { setLeadPage(1); }, [queueView, search, company, tab]);
+  useEffect(() => { setLeadPage(p=>Math.min(p,Math.max(1,Math.ceil(visibleRows.length/50)))); }, [visibleRows.length]);
   useEffect(() => { if (selected) dialogRef.current?.focus(); }, [selected?.id]);
   const generation = useRef(0);
   const admin = ["owner", "admin"].includes(role);

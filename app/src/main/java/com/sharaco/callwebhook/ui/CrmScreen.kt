@@ -47,8 +47,12 @@ fun CrmScreen(state: AppState) {
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
+    var queuePage by remember { mutableStateOf(0) }
     var queueView by remember { mutableStateOf("pending") }
     var saved by remember { mutableStateOf(false) }
+    val queueRows = leads.filter { if (queueView == "pending") pendingLead(it) else !pendingLead(it) }
+    LaunchedEffect(queueView) { queuePage = 0 }
+    LaunchedEffect(queueRows.size) { queuePage = queuePage.coerceAtMost(((queueRows.size - 1) / 50).coerceAtLeast(0)) }
     fun failed(e: Exception) {
         error = "${(e as? FirebaseFirestoreException)?.code ?: "CRM_ERROR"}: ${e.message}"
     }
@@ -287,8 +291,12 @@ fun CrmScreen(state: AppState) {
         if (row == null) {
             if (!loading && leads.isEmpty()) Text("No leads assigned yet.")
             if (!loading && leads.none { if (queueView == "pending") pendingLead(it) else !pendingLead(it) }) Text("No customers in this list.")
-            leads
-                .filter { if (queueView == "pending") pendingLead(it) else !pendingLead(it) }
+            if (queueRows.size > 50) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                TextButton(onClick = { queuePage-- }, enabled = queuePage > 0 && !busy) { Text("Previous") }
+                Text("Page ${queuePage + 1}")
+                TextButton(onClick = { queuePage++ }, enabled = (queuePage + 1) * 50 < queueRows.size && !busy) { Text("Next") }
+            }
+            queueRows.drop(queuePage * 50).take(50)
                 .forEach { lead ->
                     OutlinedCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
