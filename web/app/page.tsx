@@ -222,11 +222,9 @@ export default function Page() {
       if (gen !== generation.current) return;
       setSelected(null);
       setNotice("Status saved. Customer moved out of pending calls. Follow-ups remain available separately.");
-      const result = await api(company, "leads?limit=50");
-      if (gen !== generation.current) return;
-      setRows(result.rows);
-      setNext(result.next);
-      const nextLead = result.rows.find(
+      // The live listener supplies remote updates; avoid downloading the entire queue after each call.
+      setRows(current => current.map(r => r.id === selected.id ? {...r, status, lastAttemptId:key, lastContactAt:Date.now()} : r));
+      const nextLead = rows.find(
         (r: Row) => r.id !== selected.id && r.assignedTo === user?.uid && pendingLead(r),
       );
       if (nextLead) {
@@ -512,7 +510,7 @@ export default function Page() {
                   <div className="empty">
                     <Users size={30} />
                     <h2>{tab === "leads" && queueView === "pending" ? "No pending calls" : "No matching records"}</h2>
-                    <p>Records saved to this company will appear here.</p>
+                    <p>{tab === "leads" && queueView === "pending" ? "Saved customers are under Updated. Scheduled callbacks remain in Follow-ups." : "Records matching this view will appear here."}</p>
                   </div>
                 ) : (
                   <div className="table-scroll">
