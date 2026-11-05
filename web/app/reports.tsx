@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { addDoc, collection, limit, onSnapshot, orderBy, query, serverTimestamp, where } from 'firebase/firestore';
 import { firebase, Row } from '../lib/firebase';
 import { plain } from '../lib/spark';
+import { staffName } from '../lib/lead-workspace';
 import { achieved } from '../lib/report-metrics';
 
 const day = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -12,13 +13,13 @@ const metrics:Record<string,string> = { calls:'All calls', outgoing:'Outgoing ca
 const number = (r:Row,k:string) => Number(r[k]||0);
 export function Reports({company,uid,admin,view}:{company:string;uid:string;admin:boolean;view:string}) {
  const [from,setFrom]=useState(day()),[to,setTo]=useState(day()),[employee,setEmployee]=useState(''),[type,setType]=useState(''),[search,setSearch]=useState('');
- const [calls,setCalls]=useState<Row[]>([]),[attempts,setAttempts]=useState<Row[]>([]),[targets,setTargets]=useState<Row[]>([]),[members,setMembers]=useState<Row[]>([]);
+ const [calls,setCalls]=useState<Row[]>([]),[attempts,setAttempts]=useState<Row[]>([]),[targets,setTargets]=useState<Row[]>([]),[members,setMembers]=useState<Row[]>([]),[staff,setStaff]=useState<Row[]>([]);
  const [errors,setErrors]=useState<Record<string,string>>({}),[loaded,setLoaded]=useState<Record<string,boolean>>({}),[saving,setSaving]=useState(false),[notice,setNotice]=useState('');
  const [page,setPage]=useState(1);
  const start=millis(from),end=endDay(to),valid=Number.isFinite(start)&&Number.isFinite(end)&&end>start&&end-start<=94*86400000;
  const selected=admin?employee:uid;
  useEffect(()=>{
-  setCalls([]);setAttempts([]);setTargets([]);setMembers([]);setErrors({});setLoaded({});setPage(1);
+  setCalls([]);setAttempts([]);setTargets([]);setMembers([]);setStaff([]);setErrors({});setLoaded({});setPage(1);
   if(!valid)return;
   const db=firebase().db;
   const listen=(name:string,constraints:any[],setter:(r:Row[])=>void)=>onSnapshot(query(collection(db,'companies',company,name),...constraints,limit(10000)),s=>{
@@ -29,10 +30,10 @@ export function Reports({company,uid,admin,view}:{company:string;uid:string;admi
    listen('crmCallAttempts',[...(selected?[where('employeeUid','==',selected)]:[]),where('createdAt','>=',new Date(start)),where('createdAt','<',new Date(end)),orderBy('createdAt','asc')],setAttempts),
    listen('targetDefinitions',selected?[where('employeeUid','==',selected)]:[],setTargets),
   ];
-  if(admin)stops.push(listen('members',[],setMembers));
+  if(admin)stops.push(listen('members',[],setMembers),listen('employees',[],setStaff));
   return ()=>stops.forEach(stop=>stop());
  },[company,uid,admin,selected,start,end,valid]);
- const name=(id:unknown)=>members.find(m=>m.id===id)?.name|| (id===uid?'You':id);
+ const name=(id:unknown)=>admin?staffName(String(id),members,staff):(id===uid?'You':String(id));
  const truncated=[calls,attempts,targets,members].some(r=>r.length>=10000);
  const complete=loaded.call_logs&&loaded.crmCallAttempts&&!errors.call_logs&&!errors.crmCallAttempts&&!truncated;
  const summary=(metric:string,c=calls,a=attempts)=>achieved(metric,c,a).toLocaleString(undefined,{maximumFractionDigits:1});
@@ -58,7 +59,7 @@ export function Reports({company,uid,admin,view}:{company:string;uid:string;admi
   <div className="form-card report-filters">
    <label>From<input type="date" value={from} onChange={e=>{setFrom(e.target.value);setPage(1);}}/></label>
    <label>To<input type="date" value={to} onChange={e=>{setTo(e.target.value);setPage(1);}}/></label>
-   {admin&&<label>Employee<select value={employee} onChange={e=>{setEmployee(e.target.value);setPage(1);}}><option value="">All employees</option>{members.map(m=><option key={m.id} value={m.id}>{String(m.name||m.id)}</option>)}</select></label>}
+   {admin&&<label>Employee<select value={employee} onChange={e=>{setEmployee(e.target.value);setPage(1);}}><option value="">All employees</option>{members.map(m=><option key={m.id} value={m.id}>{String(name(m.id))}</option>)}</select></label>}
    <small>Times: {Intl.DateTimeFormat().resolvedOptions().timeZone}. Up to 93 days per report.</small>
   </div>
   {!valid&&<div className="error">Choose a valid date range of up to 93 days.</div>}
@@ -67,7 +68,7 @@ export function Reports({company,uid,admin,view}:{company:string;uid:string;admi
   <p>Device call history is separate from manually recorded CRM outcomes. Connected means an incoming or outgoing call with recorded duration above zero. Only calls already synced by Android appear here.</p>
   <div className="stats-grid">{Object.entries(metrics).map(([k,label])=><article key={k} className="stat-card"><span>{label}</span><strong>{complete?summary(k):'—'}</strong><small>{complete?'Selected period':'Waiting for complete data'}</small></article>)}</div>
   {view==='targetDefinitions'&&admin&&<form className="form-card report-filters" onSubmit={save}>
-   <label>Employee<select name="employee" required><option value="">Select employee</option>{members.filter(m=>m.approved===true).map(m=><option key={m.id} value={m.id}>{String(m.name||m.id)}</option>)}</select></label>
+   <label>Employee<select name="employee" required><option value="">Select employee</option>{members.filter(m=>m.approved===true).map(m=><option key={m.id} value={m.id}>{String(name(m.id))}</option>)}</select></label>
    <label>Metric<select name="metric">{Object.entries(metrics).map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></label>
    <label>Period<select name="period"><option value="daily">Daily (1 day)</option><option value="weekly">Weekly (7 days)</option><option value="monthly">Monthly (1 month)</option></select></label>
    <label>Start date<input type="date" name="startsOn" required defaultValue={day()}/></label>

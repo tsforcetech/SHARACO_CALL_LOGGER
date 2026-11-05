@@ -27,6 +27,7 @@ import { firebase, api, Row } from "../lib/firebase";
 import { PhoneRequest } from "./phone-request";
 import { ImportLeads } from "./import-leads";
 import { watchRows } from "../lib/spark";
+import { pendingLead } from "../lib/lead-workspace";
 import { Reports } from "./reports";
 const reportTabs = ['dashboard', 'callHistory', 'reports', 'targetDefinitions'];
 type Company = { id: string; name: string; role: string; status: string };
@@ -62,7 +63,13 @@ export default function Page() {
     [status, setStatus] = useState(""),
     [remarks, setRemarks] = useState(""),
     [followup, setFollowup] = useState(""),
-    [notice, setNotice] = useState("");
+    [notice, setNotice] = useState(""),
+    [queueView, setQueueView] = useState("pending"),
+    [leadPage, setLeadPage] = useState(1);
+  const dialogRef = useRef<HTMLElement>(null);
+  const visibleRows = rows.filter(r => tab !== "leads" || queueView === "all" || (queueView === "pending" ? pendingLead(r) : !pendingLead(r))).filter(r => JSON.stringify(r).toLowerCase().includes(search.toLowerCase()));
+  useEffect(() => { setLeadPage(1); }, [queueView, search, company, tab]);
+  useEffect(() => { if (selected) dialogRef.current?.focus(); }, [selected?.id]);
   const generation = useRef(0);
   const admin = ["owner", "admin"].includes(role);
   useEffect(() => {
@@ -213,13 +220,13 @@ export default function Page() {
       sessionStorage.removeItem(storageKey);
       if (gen !== generation.current) return;
       setSelected(null);
-      setNotice("Outcome saved. Phone-call verification remains separate.");
+      setNotice("Status saved. Customer moved out of pending calls. Follow-ups remain available separately.");
       const result = await api(company, "leads?limit=50");
       if (gen !== generation.current) return;
       setRows(result.rows);
       setNext(result.next);
       const nextLead = result.rows.find(
-        (r: Row) => r.id !== selected.id && !r.terminal && !r.doNotCall,
+        (r: Row) => r.id !== selected.id && r.assignedTo === user?.uid && pendingLead(r),
       );
       if (nextLead) {
         const claim = await api(company, "claim", { leadId: nextLead.id });
@@ -482,10 +489,11 @@ export default function Page() {
               )}
               {reportTabs.includes(tab) && role && <Reports key={`${company}:${user.uid}:${role}`} company={company} uid={user.uid} admin={admin} view={tab} />}
               {!reportTabs.includes(tab) && <section className="table-card">
+                {tab === "leads" && <div className="queue-tabs" aria-label="Lead lists">{[['pending','Pending calls'],['updated','Updated'],['all','All leads']].map(([key,label])=><button className={queueView===key?'':'secondary'} key={key} onClick={()=>setQueueView(key)}>{label} <span>{rows.filter(r=>key==='all'||(key==='pending'?pendingLead(r):!pendingLead(r))).length}</span></button>)}</div>}
                 <div className="table-toolbar">
                   <strong>
                     {labels[tab]}{" "}
-                    <span className="count">{rows.length} loaded</span>
+                    <span className="count">{visibleRows.length} records</span>
                   </strong>
                   <label className="search">
                     <Search size={16} />
@@ -497,12 +505,12 @@ export default function Page() {
                     />
                   </label>
                 </div>
-                {busy && !rows.length ? (
+                {busy && !visibleRows.length ? (
                   <div className="empty">Loading company records…</div>
-                ) : !rows.length ? (
+                ) : !visibleRows.length ? (
                   <div className="empty">
                     <Users size={30} />
-                    <h2>No records yet</h2>
+                    <h2>{tab === "leads" && queueView === "pending" ? "No pending calls" : "No matching records"}</h2>
                     <p>Records saved to this company will appear here.</p>
                   </div>
                 ) : (
@@ -518,12 +526,7 @@ export default function Page() {
                         </tr>
                       </thead>
                       <tbody>
-                        {rows
-                          .filter((r) =>
-                            JSON.stringify(r)
-                              .toLowerCase()
-                              .includes(search.toLowerCase()),
-                          )
+                        {(tab === "leads" ? visibleRows.slice((leadPage-1)*50,leadPage*50) : visibleRows)
                           .map((r) => (
                             <tr key={r.id}>
                               <td>
@@ -575,7 +578,7 @@ export default function Page() {
                                       busy ||
                                       !online ||
                                       !!r.terminal ||
-                                      !!r.doNotCall
+                                      !!r.doNotCall || r.assignedTo !== user.uid
                                     }
                                     onClick={() => start(r)}
                                   >
@@ -589,6 +592,7 @@ export default function Page() {
                     </table>
                   </div>
                 )}
+                {tab === "leads" && visibleRows.length > 50 && <div className="table-toolbar"><button className="secondary" disabled={leadPage<=1} onClick={()=>setLeadPage(p=>p-1)}>Previous</button><span>Page {leadPage}</span><button className="secondary" disabled={leadPage*50>=visibleRows.length} onClick={()=>setLeadPage(p=>p+1)}>Next</button></div>}
                 {next && (
                   <button
                     className="load-more secondary"
@@ -607,13 +611,15 @@ export default function Page() {
         <div className="modal-backdrop">
           <section
             className="caller"
+            ref={dialogRef} tabIndex={-1}
+            onKeyDown={e=>{if(e.key==='Escape'&&!busy)setSelected(null);if(e.key==='Tab'){const items=dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea:not(:disabled)');if(!items?.length)return;const first=items[0],last=items[items.length-1];if(e.shiftKey&&(document.activeElement===first||document.activeElement===dialogRef.current)){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}}}
             role="dialog"
             aria-modal="true"
             aria-labelledby="caller-title"
           >
             <div className="caller-top">
-              <span className="eyebrow">CALLING WORKSPACE</span>
-              <button className="secondary" onClick={() => setSelected(null)}>
+              <span className="eyebrow">CUSTOMER CALL · {rows.filter(r=>r.assignedTo===user.uid&&pendingLead(r)).length} PENDING</span>
+              <button className="secondary" disabled={busy} onClick={() => setSelected(null)}>
                 Close
               </button>
             </div>
@@ -628,34 +634,35 @@ export default function Page() {
                 <PhoneRequest company={company} lead={selected.id} />
               </div>
             </div>
-            <h3>Record the outcome</h3>
-            <div className="outcomes">
+            <h3>How did the conversation go?</h3><p>Choose a status, add a note, then save to open the next pending customer.</p>
+            <div className="outcomes outcome-grid">
               {statuses
                 .filter((s) => s.active)
                 .map((s) => (
                   <button
                     key={s.id}
-                    className={status === s.id ? "" : "secondary"}
+                    className={status === s.id ? "outcome-selected" : "secondary"}
+                    aria-pressed={status === s.id} disabled={busy}
                     onClick={() => setStatus(s.id)}
                   >
-                    {value(s, "label")}
+                    <span aria-hidden="true">{status === s.id ? "✓" : "○"}</span> {value(s, "label")}
                   </button>
                 ))}
             </div>
             <label>
               Remarks
               <textarea
-                value={remarks}
+                value={remarks} disabled={busy}
                 onChange={(e) => setRemarks(e.target.value)}
                 maxLength={1000}
                 placeholder="What should the next conversation pick up from?"
               />
             </label>
             <label>
-              Follow-up date and time
+              Follow-up date and time {statuses.find(s=>s.id===status)?.requiresFollowUp ? "(required)" : "(optional)"}
               <input
                 type="datetime-local"
-                value={followup}
+                value={followup} disabled={busy}
                 onChange={(e) => setFollowup(e.target.value)}
               />
             </label>
@@ -665,7 +672,7 @@ export default function Page() {
               </div>
             )}
             <div className="caller-bottom">
-              <small>Manual outcomes are saved as unverified.</small>
+              <small>Saving removes this customer from pending. No call starts automatically.</small>
               <button disabled={!status || busy || !online} onClick={save}>
                 {busy ? "Saving…" : "Save & next"}
                 <ArrowRight size={16} />

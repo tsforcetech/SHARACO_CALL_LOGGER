@@ -1,5 +1,6 @@
 import { collection, doc, getDocFromServer, getDocsFromServer, query, where, orderBy, documentId, limit, startAfter, runTransaction, serverTimestamp, writeBatch, Timestamp, onSnapshot } from 'firebase/firestore';
 import { firebase, Row } from './firebase';
+import { compareLeads } from './lead-workspace';
 
 const statusNames = [['interested','Interested'],['not_interested','Not interested'],['call_back','Call back later'],['no_answer','No answer'],['busy','Busy'],['wrong_number','Wrong number'],['unreachable','Unreachable'],['qualified','Qualified lead'],['appointment','Appointment booked'],['converted','Converted'],['do_not_call','Do not call']];
 export const plain = (data:Record<string,unknown>):Record<string,unknown> => Object.fromEntries(Object.entries(data).map(([k,v])=>[k,v instanceof Timestamp?v.toMillis():v]));
@@ -7,8 +8,8 @@ function check(ok:unknown,message:string):asserts ok {if(!ok)throw new Error(mes
 export function watchRows(cid:string,kind:string,uid:string,admin:boolean,changed:(rows:Row[],next:string|null)=>void,failed:(e:Error)=>void){
  const constraints=[];
  if(!admin&&kind!=='dispositionStatuses')constraints.push(where(kind==='leads'?'assignedTo':'employeeUid','==',uid));
- constraints.push(orderBy(documentId()),limit(51));
- return onSnapshot(query(collection(firebase().db,'companies',cid,kind),...constraints),s=>{const rows=s.docs.slice(0,50).map(d=>({...plain(d.data()),id:d.id}));changed(rows,s.size>50?rows.at(-1)!.id:null);},failed);
+ constraints.push(orderBy(documentId()),limit(kind==='leads'?10000:51));
+ return onSnapshot(query(collection(firebase().db,'companies',cid,kind),...constraints),s=>{if(kind==='leads'&&s.size>=10000){failed(new Error('Lead workspace limit reached (10,000). Contact your administrator to archive old leads.'));return;} const rows=(kind==='leads'?s.docs:s.docs.slice(0,50)).map(d=>({...plain(d.data()),id:d.id})); if(kind==='leads')rows.sort(compareLeads);changed(rows,kind!=='leads'&&s.size>50?rows.at(-1)!.id:null);},failed);
 }
 export async function sparkApi(cid:string,path:string,input?:unknown,operationKey?:string):Promise<any> {
  const {auth,db}=firebase(),uid=auth.currentUser?.uid;
@@ -23,9 +24,10 @@ export async function sparkApi(cid:string,path:string,input?:unknown,operationKe
   if(!admin&&action!=='dispositionStatuses')constraints.push(where(action==='leads'?'assignedTo':'employeeUid','==',uid));
   if(action==='callRequests'&&admin)constraints.push(where('employeeUid','==',uid));
   constraints.push(orderBy(documentId()));
-  const after=url.searchParams.get('after');if(after)constraints.push(startAfter(after));
-  const count=Math.min(100,Math.max(1,Number(url.searchParams.get('limit')||50)));constraints.push(limit(count+1));
+  const after=url.searchParams.get('after');if(after&&action!=='leads')constraints.push(startAfter(after));
+  const count=Math.min(100,Math.max(1,Number(url.searchParams.get('limit')||50)));constraints.push(limit(action==='leads'?10000:count+1));
   const snap=await getDocsFromServer(query(collection(db,'companies',cid,action),...constraints));
+  if(action==='leads') {check(snap.size<10000,'Lead workspace limit reached (10,000). Contact your administrator to archive old leads.');return {rows:snap.docs.map(d=>({...plain(d.data()),id:d.id})).sort(compareLeads),next:null};}
   const page=snap.docs.slice(0,count);return {rows:page.map(d=>({...plain(d.data()),id:d.id})),next:snap.size>count?page.at(-1)!.id:null};
  }
  const body=input as Record<string,any>,key=operationKey||crypto.randomUUID();
@@ -60,7 +62,10 @@ export async function sparkApi(cid:string,path:string,input?:unknown,operationKe
    return {attemptId:key,status:'DISPOSITION_SAVED',verificationStatus:'UNVERIFIED'};
   }
   check(lead.version===body.version&&lead.claimSessionId===body.sessionId,'LEAD_CONFLICT: Reopen the lead before saving.');
-  const status=(await tx.get(ref('dispositionStatuses',body.dispositionId))).data();check(status?.active,'INVALID_STATUS');
+  const status=(await tx.get(ref('dispositionStatuses',body.dispositionId))).data();check(status?.active,'Choose an outcome.');
+  check(!status.requiresRemarks||String(body.remarks||'').trim(),'Enter remarks for this outcome.');
+  check(!status.requiresFollowUp||body.nextFollowUpAt,'Choose a follow-up date and time.');
+  check(!body.nextFollowUpAt||(Number.isFinite(body.nextFollowUpAt)&&body.nextFollowUpAt>Date.now()),'Follow-up must be in the future.');
   const attempt={attemptId:key,companyId:cid,leadId:body.leadId,employeeUid:uid,campaignId:lead.campaignId||'',sessionId:body.sessionId,dispositionId:body.dispositionId,remarks:body.remarks||'',tags:body.tags||[],nextFollowUpAt:body.nextFollowUpAt||null,createdAt:serverTimestamp(),verificationStatus:'UNVERIFIED',matchedCallId:null,durationSeconds:null,connectionStatus:'UNKNOWN'};
   tx.set(ref('crmCallAttempts',key),attempt);tx.set(ref('leadActivities',key),{...attempt,type:'DISPOSITION'});
   tx.update(r,{status:body.dispositionId,terminal:status.isTerminal,doNotCall:body.dispositionId==='do_not_call',remarks:attempt.remarks,tags:attempt.tags,nextFollowUpAt:attempt.nextFollowUpAt,lastContactAt:serverTimestamp(),updatedAt:serverTimestamp(),version:lead.version+1,claimedBy:'',claimSessionId:'',claimExpiresAt:0,lastAttemptId:key});

@@ -1,5 +1,7 @@
 package com.sharaco.callwebhook.ui
 
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.*
@@ -10,6 +12,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -42,6 +47,7 @@ fun CrmScreen(state: AppState) {
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
+    var queueView by remember { mutableStateOf("pending") }
     var saved by remember { mutableStateOf(false) }
     fun failed(e: Exception) {
         error = "${(e as? FirebaseFirestoreException)?.code ?: "CRM_ERROR"}: ${e.message}"
@@ -51,18 +57,20 @@ fun CrmScreen(state: AppState) {
             company
                 .collection("leads")
                 .whereEqualTo("assignedTo", session.uid)
-                .limit(200)
+                .limit(10000)
                 .addSnapshotListener { snapshot, e ->
                     loading = false
                     if (e != null) {
                         failed(e)
                         leads = emptyList()
-                    } else
-                        leads =
-                            snapshot
-                                ?.documents
-                                ?.map { it.data.orEmpty() + ("id" to it.id) }
-                                .orEmpty()
+                    } else if (snapshot != null && snapshot.size() >= 10000) {
+                        error = "Lead workspace limit reached (10,000). Contact your administrator to archive old leads."
+                        leads = emptyList()
+                    } else {
+                        leads = orderedLeads(snapshot?.documents?.map { doc ->
+                            doc.data.orEmpty().mapValues { (_, value) -> if (value is Timestamp) value.toDate().time else value } + ("id" to doc.id)
+                        }.orEmpty())
+                    }
                 }
         val second =
             company.collection("dispositionStatuses").addSnapshotListener { snapshot, e ->
@@ -247,11 +255,11 @@ fun CrmScreen(state: AppState) {
                     .await()
                 saved = true
                 selected = null
+                leads = leads.map { if (it.str("id") == row.str("id")) it + mapOf("lastAttemptId" to sid, "status" to status, "lastContactAt" to System.currentTimeMillis()) else it }
                 val next =
                     leads.firstOrNull {
                         it.str("id") != row.str("id") &&
-                            !it.flag("terminal") &&
-                            !it.flag("doNotCall")
+                            pendingLead(it)
                     }
                 if (next != null) claim(next)
             } catch (e: Exception) {
@@ -267,16 +275,20 @@ fun CrmScreen(state: AppState) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text("My calling workspace", style = MaterialTheme.typography.headlineSmall)
-        Text("Assigned leads and outcomes are shared with your web workspace.")
+        Text("Work through customers in upload order. Saved outcomes leave the pending list.")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = queueView == "pending", onClick = { queueView = "pending" }, label = { Text("Pending (${leads.count(::pendingLead)})") })
+            FilterChip(selected = queueView == "updated", onClick = { queueView = "updated" }, label = { Text("Updated (${leads.count { !pendingLead(it) }})") })
+        }
         if (loading || busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
-        if (saved) Text("Outcome saved.")
+        if (saved) Text("Status saved. Customer moved out of pending calls.")
         val row = selected
         if (row == null) {
             if (!loading && leads.isEmpty()) Text("No leads assigned yet.")
-            Text("Showing up to 200 assigned leads.", style = MaterialTheme.typography.bodySmall)
+            if (!loading && leads.none { if (queueView == "pending") pendingLead(it) else !pendingLead(it) }) Text("No customers in this list.")
             leads
-                .filter { !it.flag("terminal") && !it.flag("doNotCall") }
+                .filter { if (queueView == "pending") pendingLead(it) else !pendingLead(it) }
                 .forEach { lead ->
                     OutlinedCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
@@ -285,13 +297,21 @@ fun CrmScreen(state: AppState) {
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text("${lead.str("primaryPhone")} · ${lead.str("status")}")
-                            TextButton(onClick = { open(lead) }, enabled = !busy) {
+                            TextButton(onClick = { open(lead) }, enabled = !busy && !lead.flag("terminal") && !lead.flag("doNotCall")) {
                                 Text("Open customer")
                             }
                         }
                     }
                 }
         } else {
+          Dialog(onDismissRequest = { if (!busy) selected = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+           Surface(modifier = Modifier.fillMaxWidth().padding(12.dp).heightIn(max = 760.dp), shape = MaterialTheme.shapes.extraLarge) {
+            Column(Modifier.padding(20.dp)) {
+             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Update customer", style = MaterialTheme.typography.titleMedium)
+                TextButton(onClick = { selected = null }, enabled = !busy) { Text("Close") }
+             }
+             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(row.str("customerName"), style = MaterialTheme.typography.headlineMedium)
             Text(row.str("companyName"))
             Text(row.str("primaryPhone"))
@@ -318,16 +338,21 @@ fun CrmScreen(state: AppState) {
                 "Choose the outcome. Call verification is pending.",
                 style = MaterialTheme.typography.bodySmall,
             )
-            statuses
-                .filter { it.flag("active") }
-                .forEach { outcome ->
-                    FilterChip(
-                        selected = status == outcome.str("id"),
-                        onClick = { status = outcome.str("id") },
-                        label = { Text(outcome.str("label")) },
-                        enabled = !busy,
-                    )
+            Text("How did the conversation go?", style = MaterialTheme.typography.titleMedium)
+            statuses.filter { it.flag("active") }.chunked(2).forEach { pair ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    pair.forEach { outcome ->
+                        FilterChip(
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            selected = status == outcome.str("id"),
+                            onClick = { status = outcome.str("id") },
+                            label = { Text((if (status == outcome.str("id")) "✓ " else "") + outcome.str("label")) },
+                            enabled = !busy,
+                        )
+                    }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
                 }
+            }
             OutlinedTextField(
                 remarks,
                 { if (it.length <= 1000) remarks = it },
@@ -335,22 +360,34 @@ fun CrmScreen(state: AppState) {
                 enabled = !busy,
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
-                followUp,
-                { followUp = it },
-                label = { Text("Follow-up: yyyy-MM-dd HH:mm") },
-                supportingText = { Text(session.zone) },
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            val needsFollowUp = statuses.firstOrNull { it.str("id") == status }?.flag("requiresFollowUp") == true
+            Text(if (needsFollowUp) "Follow-up (required)" else "Follow-up (optional)")
+            OutlinedButton(onClick = {
+                val now = LocalDateTime.now(ZoneId.of(session.zone))
+                DatePickerDialog(context, { _, y, m, d ->
+                    TimePickerDialog(context, { _, hour, minute ->
+                        followUp = LocalDateTime.of(y, m + 1, d, hour, minute).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                    }, now.hour, now.minute, true).show()
+                }, now.year, now.monthValue - 1, now.dayOfMonth).show()
+            }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Text(if (followUp.isBlank()) "Choose date & time" else followUp)
+            }
+            Text("Time zone: ${session.zone}", style = MaterialTheme.typography.bodySmall)
+            if (followUp.isNotBlank()) TextButton(onClick = { followUp = "" }, enabled = !busy) { Text("Clear follow-up") }
+            if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+             }
+             HorizontalDivider(Modifier.padding(vertical = 12.dp))
+             Text("Save moves this customer out of pending calls.", style = MaterialTheme.typography.bodySmall)
             Button(
                 onClick = ::save,
-                enabled = !busy && status.isNotBlank(),
+                enabled = !busy && status.isNotBlank() && (statuses.firstOrNull { it.str("id") == status }?.flag("requiresFollowUp") != true || followUp.isNotBlank()),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Save & next")
+                Text(if (busy) "Saving…" else "Save & next customer")
             }
-            TextButton(onClick = { selected = null }, enabled = !busy) { Text("Back to queue") }
+                        }
+           }
+          }
         }
     }
 }
